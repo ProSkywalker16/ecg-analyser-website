@@ -1,12 +1,14 @@
 # ECG Analyser — Web App
 
-Web-based patient dashboard for viewing ECG session history, processed signals, and AI diagnostic results. Part of the ECG Analyser platform.
+Web-based patient dashboard for viewing ECG session history, processed signals, and AI diagnostic results.
 
 ## Architecture
 
 ```
-client/        React 18 + Vite + TailwindCSS (port 5173)
-server/        Express.js API + Supabase SDK (port 3001)
+ecg-analyser-web/
+├── client/        React 18 + Vite + TailwindCSS (port 5173)
+├── server/        Express.js API + Supabase SDK (port 3001)
+└── package.json   Root orchestrator (dev scripts, concurrently)
 ```
 
 The Vite dev server proxies `/api` requests to the Express backend.
@@ -38,17 +40,13 @@ The Vite dev server proxies `/api` requests to the Express backend.
 ### Prerequisites
 
 - Node.js 18+
-- Supabase project (or use the existing one)
+- Supabase project
 
 ### 1. Environment Variables
 
-Copy the server template:
-
 ```bash
-cp server/.env.example server/.env
+cp ecg-analyser-web/server/.env.example ecg-analyser-web/server/.env
 ```
-
-Fill in:
 
 | Variable | Description |
 |---|---|
@@ -61,25 +59,26 @@ Fill in:
 
 ### 2. Run Database Migrations
 
-Open `server/setup.sql` in your Supabase SQL Editor and execute it. This enables RLS and creates secure RPC functions.
+Open `ecg-analyser-web/server/setup.sql` in your Supabase SQL Editor and execute it. This enables RLS and creates secure RPC functions.
 
 ### 3. Install
 
 ```bash
-# From ecg-analyser-web/
+cd ecg-analyser-web
 npm run install:all    # installs server/ + client/ dependencies
 ```
 
 ### 4. Development
 
 ```bash
-# Single command — starts both Express (port 3001) and Vite (port 5173)
-npm run dev
+cd ecg-analyser-web
+npm run dev            # starts both Express (port 3001) and Vite (port 5173)
 ```
 
 ### 5. Production
 
 ```bash
+cd ecg-analyser-web
 npm run build          # builds client/ into client/dist/
 npm start              # serves API + built client from server/
 ```
@@ -98,22 +97,26 @@ npm start              # serves API + built client from server/
 
 ```
 ecg-analyser-web/
-  package.json          # Root orchestrator
-  README.md
-  client/               # React frontend
-    src/
-      contexts/         # AuthContext, ThemeContext
-      services/api.js   # API client
-      pages/            # Landing, Login, Register, Dashboard
-      components/       # Navbar, Footer, Auth forms, Dashboard widgets
-    vite.config.js
-  server/               # Express backend
-    index.js            # App entry + Supabase client
-    dsp.js              # Signal processing pipeline
-    middleware/auth.js  # JWT verification
-    routes/             # auth.js, patients.js, files.js
-    setup.sql           # Supabase RLS + RPC functions
-    .env.example
+├── package.json          # Root orchestrator
+├── dev.js                # Concurrent dev runner
+├── client/
+│   ├── src/
+│   │   ├── contexts/     # AuthContext, ThemeContext
+│   │   ├── services/api.js
+│   │   ├── pages/        # Landing, Login, Register, Dashboard
+│   │   └── components/   # Navbar, Footer, Auth forms, Dashboard widgets
+│   ├── public/images/    # Team photos
+│   ├── index.html
+│   ├── vite.config.js
+│   ├── tailwind.config.js
+│   └── postcss.config.js
+└── server/
+    ├── index.js          # App entry + Supabase client
+    ├── dsp.js            # Signal processing pipeline
+    ├── middleware/auth.js # JWT verification
+    ├── routes/           # auth.js, patients.js, files.js
+    ├── setup.sql         # Supabase RLS + RPC functions
+    └── .env.example
 ```
 
 ## Deployment (Render)
@@ -122,7 +125,7 @@ A `render.yaml` is provided at the repo root. To deploy:
 
 1. Push the repo to GitHub
 2. In Render dashboard, select **Blueprint** and connect your repo
-3. Set the following environment variables in Render:
+3. Set environment variables in Render:
 
    | Variable | How to get it |
    |---|---|
@@ -132,6 +135,6 @@ A `render.yaml` is provided at the repo root. To deploy:
    | `JWT_SECRET` | Leave blank — Render will auto-generate one |
    | `CORS_ORIGINS` | Set to `https://your-app-name.onrender.com` |
 
-4. Render will auto-detect the build and start commands from `render.yaml`
+4. Render auto-detects build and start commands from `render.yaml`
 
 The server serves the built React app from `client/dist/` in production at the same domain — no separate frontend hosting needed.
