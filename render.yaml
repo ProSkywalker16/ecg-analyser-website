@@ -2,10 +2,10 @@ services:
   - type: web
     name: ecg-analyser
     runtime: node
-    repo: https://github.com/YOUR_USERNAME/ecg_analyser_website
+    repo: https://github.com/ProSkywalker16/ecg-analyser-website
     rootDir: ecg-analyser-web
-    buildCommand: cd ecg-analyser-web && npm run install:all && npm run build
-    startCommand: cd ecg-analyser-web && npm start
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
