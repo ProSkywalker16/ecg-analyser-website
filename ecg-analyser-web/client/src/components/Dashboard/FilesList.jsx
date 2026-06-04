@@ -113,7 +113,7 @@ export default function FilesList({ onViewECG }) {
                       <span className="flex items-center gap-1">
                         <Activity size={10} />
                         {file.prediction}
-                        {file.confidence && ` (${(file.confidence * 100).toFixed(1)}%)`}
+                        {file.confidence && ` (${file.confidence.toFixed(1)}%)`}
                       </span>
                     )}
                   </div>

@@ -218,7 +218,7 @@ export default function ECGViewer({ sessionId, onClose }) {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold" style={{ color: severityColor }}>{pred.class}</span>
                 <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: severityColor + '20', color: severityColor }}>{pred.severityLabel}</span>
-                {pred.confidence != null && <span className="text-xs text-[var(--text-tertiary)]">{(pred.confidence * 100).toFixed(1)}% confidence</span>}
+                {pred.confidence != null && <span className="text-xs text-[var(--text-tertiary)]">{pred.confidence.toFixed(1)}% confidence</span>}
               </div>
               <p className="text-sm text-[var(--text-secondary)] mt-1">{pred.text}</p>
               {evidence && <p className="text-xs text-[var(--text-tertiary)] mt-1 italic">{evidence}</p>}
