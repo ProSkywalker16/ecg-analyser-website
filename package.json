@@ -1,0 +1,11 @@
+{
+  "name": "ecg-analyser-website",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "cd ecg-analyser-web && npm run install:all",
+    "build": "cd ecg-analyser-web && npm run build",
+    "start": "cd ecg-analyser-web && npm start",
+    "dev": "cd ecg-analyser-web && npm run dev"
+  }
+}

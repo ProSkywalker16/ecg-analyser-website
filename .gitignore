@@ -1,0 +1,103 @@
+# ==============================================================================
+# ECG Analyser App - Git Ignore Configuration
+# Protects sensitive data, local databases, secrets, build artifacts, and IP.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Virtual Environments and Dependencies
+# ------------------------------------------------------------------------------
+.venv/
+venv/
+ENV/
+env/
+node_modules/
+dist/
+build/
+app_data/
+*.spec
+*.egg-info/
+.pytest_cache/
+
+# ------------------------------------------------------------------------------
+# 2. Python Caching and Intermediate Files
+# ------------------------------------------------------------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ------------------------------------------------------------------------------
+# 3. Local Databases, Logs, and Patient Data (CRITICAL FOR GDPR/HIPAA/PRIVACY)
+# ------------------------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.csv
+*.log
+*.tmp
+ch10_output.txt
+ch8_text.txt
+document_content.txt
+extracted_docs.txt
+extracted_full_text.txt
+pdf_text.txt
+
+# ------------------------------------------------------------------------------
+# 4. Secrets, API Keys, and Cloud Credentials (DO NOT COMMIT)
+# ------------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.env
+# Firebase / Cloud Service Account Keys
+*serviceAccountKey*.json
+*credentials*.json
+*client_secret*.json
+# Any developer secrets/configs
+secrets/
+config/local_secrets.*
+
+# ------------------------------------------------------------------------------
+# 5. Compiled Executables and Binaries
+# ------------------------------------------------------------------------------
+*.exe
+*.dll
+*.so
+*.dylib
+
+# ------------------------------------------------------------------------------
+# 6. Deep Learning Models and Weights (Protects IP & keeps repo size small)
+# ------------------------------------------------------------------------------
+models/
+*.tflite
+*.h5
+*.pb
+*.onnx
+*.pt
+*.pth
+
+# ------------------------------------------------------------------------------
+# 7. IDE, OS, and System Junk
+# ------------------------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ------------------------------------------------------------------------------
+# 8. Text Files & Reports
+# ------------------------------------------------------------------------------
+*.txt
+!requirements.txt
+
+# ------------------------------------------------------------------------------
+# 9. Research Drafts and Academic Artifacts (Optional)
+# ------------------------------------------------------------------------------
+# Many thesis drafts, PDFs, and Word documents are mixed in this folder.
+# If you want to keep your public repository clean, you can uncomment these:
+*.pdf
+*.docx
+*.docx.tmp
+*.html

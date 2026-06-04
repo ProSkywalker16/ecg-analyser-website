@@ -1,0 +1,12 @@
+{
+  "name": "ecg-analyser-website",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "dev": "node dev.js",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start"
+  }
+}
