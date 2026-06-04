@@ -4,8 +4,8 @@ services:
     runtime: node
     repo: https://github.com/ProSkywalker16/ecg-analyser-website
     rootDir: ecg-analyser-web
-    buildCommand: npm run install:all && npm run build
-    startCommand: npm start
+    buildCommand: npm --prefix server install && npm --prefix client install && cd client && npx vite build
+    startCommand: cd server && node index.js
     envVars:
       - key: NODE_ENV
         value: production
