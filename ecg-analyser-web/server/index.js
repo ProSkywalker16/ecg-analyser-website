@@ -79,6 +79,12 @@ const apiLimiter = rateLimit({
 
 // Body parser with size limit
 app.use(express.json({ limit: '50kb' }));
+
+// Health check — must be before rate limiter so Render's pings don't get 429'd
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 app.use('/api/', apiLimiter);
 
 // Trust first proxy
@@ -95,10 +101,6 @@ function sanitizeError(err) {
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/files', fileRoutes);
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 // Serve built client in production
 const __filename = fileURLToPath(import.meta.url);
