@@ -151,9 +151,10 @@ export default function ECGViewer({ sessionId, onClose }) {
     ctx.stroke();
 
     // R-peak markers
-    if (viewMode !== 'raw' && data.rPeaks && data.rPeaks.length > 0) {
+    const peaks = viewMode === 'normalized' ? (data.rPeaksNorm || []) : (data.rPeaks || []);
+    if (viewMode !== 'raw' && peaks.length > 0) {
       ctx.fillStyle = '#ff4444';
-      for (const peakIdx of data.rPeaks) {
+      for (const peakIdx of peaks) {
         const x = toX(peakIdx);
         const y = toY(signal[peakIdx]?.v ?? 0);
         ctx.beginPath();
@@ -353,7 +354,7 @@ export default function ECGViewer({ sessionId, onClose }) {
         {[
           { key: 'raw',        label: 'Raw' },
           { key: 'processed',  label: 'Processed' },
-          { key: 'normalized', label: 'AI Input' },
+          { key: 'normalized', label: 'AI Inference' },
         ].map(m => (
           <button key={m.key}
             onClick={() => setViewMode(m.key)}

@@ -146,8 +146,11 @@ router.get('/csv/:sessionId/processed', async (req, res) => {
     const resampled    = resampleTo(winNorm, 1800);
 
     // ── R-peaks on full processed signal at real fs ──────────────────────
-    const fullNorm   = normalize(fullNotched);
-    const rPeaks     = findRPeaks(fullNorm, fs);
+    const fullNorm    = normalize(fullNotched);
+    const rPeaks      = findRPeaks(fullNorm, fs);
+
+    // ── R-peaks on the 1800-pt resampled signal at 360 Hz ────────────────
+    const rPeaksNorm  = findRPeaks(resampled, 360);
 
     const predClass = session.prediction ? CLASS_MAP.indexOf(session.prediction) : -1;
     const guidance  = predClass >= 0 && predClass < CLINICAL_GUIDANCE.length
@@ -179,6 +182,7 @@ router.get('/csv/:sessionId/processed', async (req, res) => {
       processed: processedExport,
       normalized: normExport,
       rPeaks,
+      rPeaksNorm,
       prediction: guidance,
     });
   } catch (error) {
