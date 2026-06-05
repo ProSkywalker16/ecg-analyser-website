@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BookOpen, Heart, Clock, Trophy, Users, X } from 'lucide-react';
+import useScrollReveal from '../../hooks/useScrollReveal';
 
 const team = [
   {
@@ -62,6 +63,10 @@ const milestones = [
 
 export default function About() {
   const [lightbox, setLightbox] = useState(null);
+  const [headerRef, headerVisible] = useScrollReveal();
+  const [teamRef, teamVisible] = useScrollReveal();
+  const [journeyRef, journeyVisible] = useScrollReveal();
+  const [milestonesRef, milestonesVisible] = useScrollReveal();
 
   const closeLightbox = useCallback(() => setLightbox(null), []);
 
@@ -71,14 +76,15 @@ export default function About() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [lightbox, closeLightbox]);
+
   return (
     <section id="about" className="py-24 relative bg-[var(--bg-secondary)] overflow-hidden">
       <div className="absolute inset-0 ecg-grid-bg opacity-10" />
-      <div className="absolute top-40 -left-40 w-96 h-96 bg-primary-500/5 rounded-full blur-3xl" />
-      <div className="absolute bottom-40 -right-40 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
+      <div className="absolute top-40 -left-40 w-96 h-96 bg-primary-500/5 rounded-full blur-3xl animate-float" />
+      <div className="absolute bottom-40 -right-40 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-float-delayed" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16 animate-fade-in">
+        <div ref={headerRef} className={`text-center mb-16 transition-all duration-700 ${headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 mb-4">
             <Users size={14} className="text-primary-400" />
             <span className="text-sm font-medium text-primary-400">Our Team</span>
@@ -92,12 +98,12 @@ export default function About() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 mb-20">
+        <div ref={teamRef} className="grid md:grid-cols-2 gap-8 mb-20">
           {team.map((member, i) => (
             <div
               key={i}
-              className="card-hover p-8 md:p-10 animate-slide-up flex flex-col items-center text-center group"
-              style={{ animationDelay: `${i * 100}ms` }}
+              className={`card-hover p-8 md:p-10 flex flex-col items-center text-center group transition-all duration-700 ${teamVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-16'}`}
+              style={{ transitionDelay: `${i * 100}ms` }}
             >
               <div className="relative mb-6">
                 <div className={`w-44 h-44 md:w-52 md:h-52 rounded-full bg-gradient-to-br ${member.color} p-1.5 group-hover:scale-105 transition-transform duration-300 cursor-pointer`}
@@ -126,7 +132,7 @@ export default function About() {
           ))}
         </div>
 
-        <div className="max-w-4xl mx-auto mb-16 animate-fade-in">
+        <div ref={journeyRef} className={`max-w-4xl mx-auto mb-16 transition-all duration-700 ${journeyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="card overflow-hidden cursor-pointer" onClick={() => setLightbox('/images/group_photo.jpeg')}>
             <img
               src="/images/group_photo.jpeg"
@@ -140,12 +146,12 @@ export default function About() {
           </p>
         </div>
 
-        <div className="text-center mb-16 animate-fade-in">
+        <div className={`text-center mb-16 transition-all duration-700 ${journeyVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="max-w-4xl mx-auto card p-10 md:p-12">
             <div className="flex items-center justify-center gap-3 mb-5">
-              <Heart size={24} className="text-red-500" />
+              <Heart size={24} className="text-red-500 animate-pulse-slow" />
               <h3 className="text-2xl md:text-3xl font-bold text-[var(--text-primary)]">Our Journey</h3>
-              <Heart size={24} className="text-red-500" />
+              <Heart size={24} className="text-red-500 animate-pulse-slow" />
             </div>
             <p className="text-base md:text-lg text-[var(--text-secondary)] leading-relaxed max-w-3xl mx-auto">
               This project took two years to build from scratch. It brought us together through countless
@@ -158,11 +164,11 @@ export default function About() {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 animate-fade-in">
+        <div ref={milestonesRef} className="grid md:grid-cols-3 gap-8">
           {milestones.map((item, i) => {
             const Icon = item.icon;
             return (
-              <div key={i} className="card-hover p-8 text-center group">
+              <div key={i} className={`card-hover p-8 text-center group transition-all duration-700 ${milestonesVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'}`} style={{ transitionDelay: `${i * 150}ms` }}>
                 <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${item.color} p-3.5 mx-auto mb-5 group-hover:scale-110 transition-transform duration-300`}>
                   <Icon size={30} className="text-white" />
                 </div>

@@ -1,4 +1,5 @@
 import { Cpu, FileText, Brain, Cloud, Smartphone, Shield, Activity, BarChart3 } from 'lucide-react';
+import useScrollReveal from '../../hooks/useScrollReveal';
 
 const features = [
   {
@@ -40,12 +41,14 @@ const features = [
 ];
 
 export default function Features() {
+  const [ref, visible] = useScrollReveal();
+
   return (
     <section id="features" className="py-24 relative bg-[var(--bg-primary)]">
       <div className="absolute inset-0 ecg-grid-bg opacity-20" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16 animate-fade-in">
+        <div ref={ref} className={`text-center mb-16 transition-all duration-700 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 mb-4">
             <Cpu size={14} className="text-primary-400" />
             <span className="text-sm font-medium text-primary-400">Platform Features</span>
@@ -63,7 +66,7 @@ export default function Features() {
           {features.map((feature, i) => {
             const Icon = feature.icon;
             return (
-              <div key={i} className="card-hover p-6 group animate-slide-up" style={{ animationDelay: `${i * 100}ms` }}>
+              <div key={i} className={`card-hover p-6 group transition-all duration-700 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'}`} style={{ transitionDelay: `${i * 100}ms` }}>
                 <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.color} p-2.5 mb-4 group-hover:scale-110 transition-transform duration-300`}>
                   <Icon size={24} className="text-white" />
                 </div>

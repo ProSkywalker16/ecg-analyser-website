@@ -36,6 +36,14 @@ export default {
         'fade-in': 'fadeIn 0.5s ease-out',
         'slide-up': 'slideUp 0.5s ease-out',
         'pulse-slow': 'pulse 3s ease-in-out infinite',
+        'fade-in-up': 'fadeInUp 0.6s ease-out',
+        'fade-in-left': 'fadeInLeft 0.6s ease-out',
+        'fade-in-right': 'fadeInRight 0.6s ease-out',
+        'scale-in': 'scaleIn 0.5s ease-out',
+        'float': 'float 6s ease-in-out infinite',
+        'float-delayed': 'float-delayed 6s ease-in-out infinite',
+        'orb-pulse': 'orb-pulse 4s ease-in-out infinite',
+        'typing': 'typing 3.5s steps(40) forwards',
       },
       keyframes: {
         'ecg-line': {
