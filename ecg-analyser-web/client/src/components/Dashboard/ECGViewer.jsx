@@ -27,6 +27,11 @@ export default function ECGViewer({ sessionId, onClose }) {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState(0);
   const canvasRef = useRef(null);
+  const scrollbarRef = useRef(null);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartOffset = useRef(0);
+  const isScrollbarDrag = useRef(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -45,6 +50,21 @@ export default function ECGViewer({ sessionId, onClose }) {
     return data.processed;
   }, [data, viewMode]);
 
+  const getViewLen = useCallback(() => {
+    const signal = getSignal();
+    return Math.floor(signal.length / zoom);
+  }, [getSignal, zoom]);
+
+  const getMaxOffset = useCallback(() => {
+    const signal = getSignal();
+    return Math.max(0, signal.length - getViewLen());
+  }, [getSignal, getViewLen]);
+
+  const clampOffset = useCallback((o) => {
+    return Math.max(0, Math.min(o, getMaxOffset()));
+  }, [getMaxOffset]);
+
+  /* ── Drawing ── */
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !data) return;
@@ -59,8 +79,8 @@ export default function ECGViewer({ sessionId, onClose }) {
     canvas.height = h * dpr;
     ctx.scale(dpr, dpr);
 
-    const viewLen = Math.floor(signal.length / zoom);
-    const startIdx = Math.max(0, Math.min(offset, signal.length - viewLen));
+    const viewLen = getViewLen();
+    const startIdx = clampOffset(offset);
     const endIdx = Math.min(signal.length, startIdx + viewLen);
     const visible = signal.slice(startIdx, endIdx);
 
@@ -69,10 +89,10 @@ export default function ECGViewer({ sessionId, onClose }) {
     const plotH = h - padT - padB;
 
     ctx.clearRect(0, 0, w, h);
-
     ctx.fillStyle = '#060e1a';
     ctx.fillRect(padL, padT, plotW, plotH);
 
+    /* grid */
     ctx.strokeStyle = '#1a3a55';
     ctx.lineWidth = 0.5;
     ctx.setLineDash([3, 3]);
@@ -87,6 +107,7 @@ export default function ECGViewer({ sessionId, onClose }) {
     }
     ctx.setLineDash([]);
 
+    /* value range */
     let minV = Infinity, maxV = -Infinity;
     for (const p of visible) {
       if (p.v < minV) minV = p.v;
@@ -100,6 +121,7 @@ export default function ECGViewer({ sessionId, onClose }) {
     const toX = (i) => padL + (i / visible.length) * plotW;
     const toY = (v) => padT + plotH - ((v - minV) / (maxV - minV)) * plotH;
 
+    /* signal line */
     ctx.strokeStyle = viewMode === 'raw' ? '#5a8aaa' : '#00FFB4';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
@@ -111,6 +133,7 @@ export default function ECGViewer({ sessionId, onClose }) {
     }
     ctx.stroke();
 
+    /* R-peaks */
     if (viewMode !== 'raw' && data.rPeaks) {
       const localPeaks = data.rPeaks.filter(p => p >= startIdx && p < endIdx);
       ctx.fillStyle = '#ff4444';
@@ -124,6 +147,7 @@ export default function ECGViewer({ sessionId, onClose }) {
       }
     }
 
+    /* x-axis labels */
     ctx.fillStyle = '#5a8aaa';
     ctx.font = '10px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
@@ -133,18 +157,21 @@ export default function ECGViewer({ sessionId, onClose }) {
       ctx.fillText(visible[i].t.toFixed(1) + 's', x, padT + plotH + 18);
     }
 
+    /* y-axis labels */
     ctx.textAlign = 'right';
     const vStep = 4;
     for (let i = 0; i <= vStep; i++) {
-      const v = minV + (range / vStep) * i;
+      const v = minV + ((maxV - minV) / vStep) * i;
       const y = toY(v);
       ctx.fillText(v.toFixed(1), padL - 5, y + 3);
     }
 
+    /* border */
     ctx.strokeStyle = '#1a3a55';
     ctx.lineWidth = 1;
     ctx.strokeRect(padL, padT, plotW, plotH);
 
+    /* axis labels */
     ctx.fillStyle = '#5a8aaa';
     ctx.font = '9px Inter, sans-serif';
     ctx.textAlign = 'left';
@@ -154,7 +181,7 @@ export default function ECGViewer({ sessionId, onClose }) {
     ctx.rotate(-Math.PI / 2);
     ctx.fillText(viewMode === 'raw' ? 'Raw ECG' : viewMode === 'normalized' ? 'Normalized' : 'Processed ECG', 0, 0);
     ctx.restore();
-  }, [data, viewMode, zoom, offset, getSignal]);
+  }, [data, viewMode, zoom, offset, getSignal, getViewLen, clampOffset]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -164,11 +191,168 @@ export default function ECGViewer({ sessionId, onClose }) {
     return () => window.removeEventListener('resize', onResize);
   }, [draw]);
 
+  /* ── Scrollbar drawing ── */
+  const drawScrollbar = useCallback(() => {
+    const sb = scrollbarRef.current;
+    if (!sb) return;
+    const signal = getSignal();
+    if (signal.length === 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = sb.clientWidth;
+    const h = sb.clientHeight;
+    sb.width = w * dpr;
+    sb.height = h * dpr;
+    const ctx = sb.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    /* track */
+    ctx.fillStyle = '#0a1828';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, w, h, 4);
+    ctx.fill();
+
+    /* thumb */
+    const thumbRatio = 1 / zoom;
+    const thumbW = Math.max(30, w * thumbRatio);
+    const maxScroll = w - thumbW;
+    const maxOff = getMaxOffset();
+    const thumbX = maxOff > 0 ? (clampOffset(offset) / maxOff) * maxScroll : 0;
+
+    ctx.fillStyle = '#00FFB440';
+    ctx.beginPath();
+    ctx.roundRect(thumbX, 1, thumbW, h - 2, 3);
+    ctx.fill();
+
+    ctx.strokeStyle = '#00FFB480';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(thumbX, 1, thumbW, h - 2, 3);
+    ctx.stroke();
+  }, [zoom, offset, getSignal, getMaxOffset, clampOffset]);
+
+  useEffect(() => { drawScrollbar(); }, [drawScrollbar]);
+
+  /* ── Mouse drag on canvas ── */
+  const handleMouseDown = useCallback((e) => {
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartOffset.current = offset;
+    e.currentTarget.style.cursor = 'grabbing';
+  }, [offset]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dx = e.clientX - dragStartX.current;
+    const signal = getSignal();
+    const viewLen = getViewLen();
+    const plotW = canvas.clientWidth - 70; // padL + padR
+    const pointsPerPx = viewLen / plotW;
+    const newOffset = dragStartOffset.current - dx * pointsPerPx;
+    setOffset(clampOffset(Math.round(newOffset)));
+  }, [getSignal, getViewLen, clampOffset]);
+
+  const handleMouseUp = useCallback((e) => {
+    isDragging.current = false;
+    if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+  }, []);
+
+  useEffect(() => {
+    const onUp = () => { isDragging.current = false; isScrollbarDrag.current = false; };
+    window.addEventListener('mouseup', onUp);
+    return () => window.removeEventListener('mouseup', onUp);
+  }, []);
+
+  /* ── Wheel zoom (zoom into cursor position) ── */
   const handleWheel = useCallback((e) => {
     e.preventDefault();
-    if (e.deltaY < 0) setZoom(z => Math.min(10, z + 0.5));
-    else setZoom(z => Math.max(1, z - 0.5));
+    const signal = getSignal();
+    if (signal.length === 0) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const padL = 50, padR = 20;
+    const plotW = canvas.clientWidth - padL - padR;
+    const relX = Math.max(0, Math.min(1, (mouseX - padL) / plotW));
+
+    const oldZoom = zoom;
+    let newZoom;
+    if (e.deltaY < 0) newZoom = Math.min(20, oldZoom * 1.2);
+    else newZoom = Math.max(1, oldZoom / 1.2);
+
+    /* keep the point under cursor stable */
+    const oldViewLen = Math.floor(signal.length / oldZoom);
+    const newViewLen = Math.floor(signal.length / newZoom);
+    const cursorIdx = offset + relX * oldViewLen;
+    const newOffset = Math.round(cursorIdx - relX * newViewLen);
+
+    setZoom(newZoom);
+    setOffset(Math.max(0, Math.min(signal.length - newViewLen, newOffset)));
+  }, [zoom, offset, getSignal]);
+
+  /* ── Scrollbar drag ── */
+  const handleScrollbarDown = useCallback((e) => {
+    isScrollbarDrag.current = true;
+    const sb = scrollbarRef.current;
+    if (!sb) return;
+    const rect = sb.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const w = sb.clientWidth;
+    const thumbRatio = 1 / zoom;
+    const thumbW = Math.max(30, w * thumbRatio);
+    const maxScroll = w - thumbW;
+    const ratio = Math.max(0, Math.min(1, (x - thumbW / 2) / maxScroll));
+    setOffset(clampOffset(Math.round(ratio * getMaxOffset())));
+    dragStartX.current = e.clientX;
+  }, [zoom, clampOffset, getMaxOffset]);
+
+  const handleScrollbarMove = useCallback((e) => {
+    if (!isScrollbarDrag.current) return;
+    const sb = scrollbarRef.current;
+    if (!sb) return;
+    const rect = sb.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const w = sb.clientWidth;
+    const thumbRatio = 1 / zoom;
+    const thumbW = Math.max(30, w * thumbRatio);
+    const maxScroll = w - thumbW;
+    const ratio = Math.max(0, Math.min(1, (x - thumbW / 2) / maxScroll));
+    setOffset(clampOffset(Math.round(ratio * getMaxOffset())));
+  }, [zoom, clampOffset, getMaxOffset]);
+
+  /* ── Touch support for mobile ── */
+  const handleTouchStart = useCallback((e) => {
+    if (e.touches.length === 1) {
+      isDragging.current = true;
+      dragStartX.current = e.touches[0].clientX;
+      dragStartOffset.current = offset;
+    }
+  }, [offset]);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!isDragging.current || e.touches.length !== 1) return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dx = e.touches[0].clientX - dragStartX.current;
+    const viewLen = getViewLen();
+    const plotW = canvas.clientWidth - 70;
+    const pointsPerPx = viewLen / plotW;
+    const newOffset = dragStartOffset.current - dx * pointsPerPx;
+    setOffset(clampOffset(Math.round(newOffset)));
+  }, [getViewLen, clampOffset]);
+
+  const handleTouchEnd = useCallback(() => {
+    isDragging.current = false;
   }, []);
+
+  /* ── Keyboard arrow support ── */
+  const panStep = useCallback(() => Math.max(1, Math.floor(getViewLen() * 0.25)), [getViewLen]);
 
   if (loading) return (
     <div className="card p-8 flex items-center justify-center"><Loader2 size={24} className="animate-spin text-primary-400" /></div>
@@ -183,6 +367,10 @@ export default function ECGViewer({ sessionId, onClose }) {
   const pred = data.prediction;
   const severityColor = SEVERITY_COLORS[pred?.severity] || '#c8d8e8';
   const evidence = pred ? CLINICAL_EVIDENCE[pred.class] : null;
+  const signal = getSignal();
+  const totalDur = signal.length / (data.fs || 360);
+  const viewDur = (getViewLen() / (data.fs || 360));
+  const currentStart = (clampOffset(offset) / (data.fs || 360));
 
   return (
     <div className="card p-4 md:p-6">
@@ -198,9 +386,25 @@ export default function ECGViewer({ sessionId, onClose }) {
             </p>
           </div>
         </div>
-        <div className="flex gap-1">
-          <button onClick={() => setZoom(z => Math.min(10, z + 0.5))} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]" title="Zoom in"><ZoomIn size={16} /></button>
-          <button onClick={() => setZoom(z => Math.max(1, z - 0.5))} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]" title="Zoom out"><ZoomOut size={16} /></button>
+        <div className="flex gap-1 items-center">
+          <button onClick={() => {
+            const signal = getSignal();
+            const oldViewLen = getViewLen();
+            const newZoom = Math.min(20, zoom * 1.5);
+            const newViewLen = Math.floor(signal.length / newZoom);
+            const center = offset + oldViewLen / 2;
+            setZoom(newZoom);
+            setOffset(clampOffset(Math.round(center - newViewLen / 2)));
+          }} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]" title="Zoom in"><ZoomIn size={16} /></button>
+          <button onClick={() => {
+            const signal = getSignal();
+            const oldViewLen = getViewLen();
+            const newZoom = Math.max(1, zoom / 1.5);
+            const newViewLen = Math.floor(signal.length / newZoom);
+            const center = offset + oldViewLen / 2;
+            setZoom(newZoom);
+            setOffset(clampOffset(Math.round(center - newViewLen / 2)));
+          }} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]" title="Zoom out"><ZoomOut size={16} /></button>
           <button onClick={() => { setOffset(0); setZoom(1); }} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] text-xs font-medium" title="Reset view">Fit</button>
           {onClose && (
             <button onClick={onClose} className="p-2 rounded-lg hover:bg-red-500/10 text-red-400 text-xs">Close</button>
@@ -233,7 +437,7 @@ export default function ECGViewer({ sessionId, onClose }) {
           { key: 'processed', label: 'Processed' },
           { key: 'normalized', label: 'AI Input' },
         ].map(m => (
-          <button key={m.key} onClick={() => { setViewMode(m.key); setOffset(0); }}
+          <button key={m.key} onClick={() => { setViewMode(m.key); setOffset(0); setZoom(1); }}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${viewMode === m.key ? 'bg-[var(--card-bg)] shadow-sm text-primary-400' : 'text-[var(--text-secondary)]'}`}>
             {m.label}
           </button>
@@ -241,33 +445,54 @@ export default function ECGViewer({ sessionId, onClose }) {
       </div>
 
       <div className="relative">
+        {/* Navigation bar */}
         <div className="flex items-center gap-1 mb-1">
-          <button onClick={() => setOffset(o => Math.max(0, o - Math.floor(300 / zoom)))}
+          <button onClick={() => setOffset(o => clampOffset(o - panStep()))}
             className="p-1 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]"><ChevronLeft size={14} /></button>
           <span className="text-xs text-[var(--text-tertiary)] flex-1 text-center">
-            Scroll · Zoom: {zoom}x · {getSignal().length} pts
+            {currentStart.toFixed(1)}s – {(currentStart + viewDur).toFixed(1)}s of {totalDur.toFixed(1)}s &middot; Zoom: {zoom.toFixed(1)}x &middot; {signal.length} pts
           </span>
-          <button onClick={() => setOffset(o => Math.min(getSignal().length - Math.floor(getSignal().length / zoom), o + Math.floor(300 / zoom)))}
+          <button onClick={() => setOffset(o => clampOffset(o + panStep()))}
             className="p-1 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]"><ChevronRight size={14} /></button>
         </div>
+
+        {/* Canvas */}
         <canvas
           ref={canvasRef}
-          className="w-full rounded-xl border border-[var(--border-color)] cursor-grab active:cursor-grabbing"
-          style={{ height: '320px', background: '#060e1a' }}
+          className="w-full rounded-xl border border-[var(--border-color)]"
+          style={{ height: '320px', background: '#060e1a', cursor: 'grab' }}
           onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         />
+
+        {/* Scrollbar track */}
+        <canvas
+          ref={scrollbarRef}
+          className="w-full mt-1 rounded"
+          style={{ height: '10px', cursor: 'pointer' }}
+          onMouseDown={handleScrollbarDown}
+          onMouseMove={handleScrollbarMove}
+          onMouseUp={() => { isScrollbarDrag.current = false; }}
+        />
+
         <div className="text-xs text-[var(--text-tertiary)] text-center mt-1">
-          Scroll to zoom &middot; Use arrows to pan &middot; Red dots = R-peaks
+          Drag to scroll &middot; Scroll wheel to zoom &middot; Red dots = R-peaks
         </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
         {[
           { label: 'Sample Rate', value: `~${data.fs} Hz` },
-          { label: 'Window', value: `${(getSignal().length / (data.fs || 360)).toFixed(1)}s` },
+          { label: 'Duration', value: `${totalDur.toFixed(1)}s` },
           { label: 'R-Peaks', value: data.rPeaks?.length || 0 },
           { label: 'Heart Rate', value: data.rPeaks?.length > 0
-            ? Math.round(data.rPeaks.length / (getSignal().length / (data.fs || 360)) * 60) + ' BPM'
+            ? Math.round(data.rPeaks.length / totalDur * 60) + ' BPM'
             : 'N/A' },
         ].map((s, i) => (
           <div key={i} className="p-3 rounded-xl bg-[var(--bg-secondary)] text-center">
