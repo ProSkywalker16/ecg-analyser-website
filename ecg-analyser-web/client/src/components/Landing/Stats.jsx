@@ -1,9 +1,9 @@
 import { Activity, Users, FileText, Award } from 'lucide-react';
 
 const stats = [
-  { icon: Activity, value: '5000+', label: 'ECG Sessions', color: 'from-cyan-500 to-blue-500' },
-  { icon: Users, value: '100+', label: 'Active Users', color: 'from-purple-500 to-pink-500' },
-  { icon: FileText, value: '10K+', label: 'Reports Generated', color: 'from-green-500 to-emerald-500' },
+  { icon: Activity, value: '100+', label: 'ECG Sessions', color: 'from-cyan-500 to-blue-500' },
+  { icon: Users, value: '5', label: 'Active Users', color: 'from-purple-500 to-pink-500' },
+  { icon: FileText, value: 'Almost 60', label: 'Reports Generated', color: 'from-green-500 to-emerald-500' },
   { icon: Award, value: '98.5%', label: 'Diagnostic Accuracy', color: 'from-amber-500 to-orange-500' },
 ];
 
@@ -43,7 +43,7 @@ export default function Stats() {
             Ready to Transform Your ECG Analysis?
           </h3>
           <p className="text-[var(--text-secondary)] max-w-2xl mx-auto mb-8">
-            Join healthcare professionals using AI-powered ECG diagnostics. 
+            Join healthcare professionals using AI-powered ECG diagnostics.
             Get started for free — no credit card required.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
