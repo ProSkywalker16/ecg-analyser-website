@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Activity, AlertTriangle, Loader2, AlertCircle,
-  ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
+  ZoomIn, ZoomOut,
 } from 'lucide-react';
 import { filesService } from '../../services/api';
 
+// ── constants ──────────────────────────────────────────────────────────────
 const SEVERITY_COLORS = {
   normal: '#00FFB4',
   moderate: '#ffaa00',
@@ -19,20 +20,26 @@ const CLINICAL_EVIDENCE = {
   'ST Elevation': 'Elevation in ST-segment detected relative to baseline.',
 };
 
-export default function ECGViewer({ sessionId, onClose }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [viewMode, setViewMode] = useState('processed');
-  const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState(0);
-  const canvasRef = useRef(null);
-  const scrollbarRef = useRef(null);
-  const isDragging = useRef(false);
-  const dragStartX = useRef(0);
-  const dragStartOffset = useRef(0);
-  const isScrollbarDrag = useRef(false);
+const CANVAS_HEIGHT = 320;   // px (CSS)
+const PAD_L = 54, PAD_R = 16, PAD_T = 22, PAD_B = 34;
 
+// Default pixels per second — matches a comfortable "desktop app" view
+const DEFAULT_PX_PER_SEC = 60;
+const MIN_PX_PER_SEC = 10;
+const MAX_PX_PER_SEC = 400;
+
+// ── component ──────────────────────────────────────────────────────────────
+export default function ECGViewer({ sessionId, onClose }) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+  const [viewMode, setViewMode] = useState('processed');
+  const [pxPerSec, setPxPerSec] = useState(DEFAULT_PX_PER_SEC);
+
+  const canvasRef    = useRef(null);
+  const containerRef = useRef(null); // the scrollable div
+
+  // ── fetch data ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!sessionId) return;
     setLoading(true);
@@ -43,6 +50,7 @@ export default function ECGViewer({ sessionId, onClose }) {
       .finally(() => setLoading(false));
   }, [sessionId]);
 
+  // ── derive signal array ────────────────────────────────────────────────
   const getSignal = useCallback(() => {
     if (!data) return [];
     if (viewMode === 'raw') return data.raw;
@@ -50,330 +58,252 @@ export default function ECGViewer({ sessionId, onClose }) {
     return data.processed;
   }, [data, viewMode]);
 
-  const getViewLen = useCallback(() => {
-    const signal = getSignal();
-    return Math.floor(signal.length / zoom);
-  }, [getSignal, zoom]);
-
-  const getMaxOffset = useCallback(() => {
-    const signal = getSignal();
-    return Math.max(0, signal.length - getViewLen());
-  }, [getSignal, getViewLen]);
-
-  const clampOffset = useCallback((o) => {
-    return Math.max(0, Math.min(o, getMaxOffset()));
-  }, [getMaxOffset]);
-
-  /* ── Drawing ── */
+  // ── draw full signal on a wide canvas ────────────────────────────────
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !data) return;
-    const ctx = canvas.getContext('2d');
+
     const signal = getSignal();
-    if (signal.length === 0) return;
+    if (!signal || signal.length === 0) return;
+
+    const fs      = data.fs || 360;
+    const totalSec = signal.length / fs;
+
+    // Total canvas width = pxPerSec × totalSec + padding
+    const totalPxW = Math.round(pxPerSec * totalSec) + PAD_L + PAD_R;
 
     const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
+    canvas.width  = totalPxW * dpr;
+    canvas.height = CANVAS_HEIGHT * dpr;
+    canvas.style.width  = `${totalPxW}px`;
+    canvas.style.height = `${CANVAS_HEIGHT}px`;
+
+    const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
-    const viewLen = getViewLen();
-    const startIdx = clampOffset(offset);
-    const endIdx = Math.min(signal.length, startIdx + viewLen);
-    const visible = signal.slice(startIdx, endIdx);
+    const plotW = totalPxW - PAD_L - PAD_R;
+    const plotH = CANVAS_HEIGHT - PAD_T - PAD_B;
 
-    const padL = 50, padR = 20, padT = 20, padB = 30;
-    const plotW = w - padL - padR;
-    const plotH = h - padT - padB;
-
-    ctx.clearRect(0, 0, w, h);
+    // Background
+    ctx.clearRect(0, 0, totalPxW, CANVAS_HEIGHT);
     ctx.fillStyle = '#060e1a';
-    ctx.fillRect(padL, padT, plotW, plotH);
+    ctx.fillRect(PAD_L, PAD_T, plotW, plotH);
 
-    /* grid */
-    ctx.strokeStyle = '#1a3a55';
-    ctx.lineWidth = 0.5;
-    ctx.setLineDash([3, 3]);
-    const gridX = 10, gridY = 8;
-    for (let i = 1; i < gridX; i++) {
-      const x = padL + (plotW / gridX) * i;
-      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+    // Grid — vertical lines every 1 s, minor every 0.2 s
+    const drawVLine = (x, color, dash) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 0.5;
+      ctx.setLineDash(dash);
+      ctx.beginPath();
+      ctx.moveTo(PAD_L + x, PAD_T);
+      ctx.lineTo(PAD_L + x, PAD_T + plotH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+
+    // minor grid every 0.2 s
+    const minorStep = 0.2;
+    for (let t = 0; t <= totalSec; t += minorStep) {
+      drawVLine(t * pxPerSec, '#122030', [2, 4]);
     }
+    // major grid every 1 s
+    for (let t = 0; t <= totalSec; t += 1) {
+      drawVLine(t * pxPerSec, '#1a3a55', [4, 4]);
+    }
+    // horizontal grid lines
+    const gridY = 8;
     for (let i = 1; i < gridY; i++) {
-      const y = padT + (plotH / gridY) * i;
-      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+      const y = PAD_T + (plotH / gridY) * i;
+      ctx.strokeStyle = '#1a3a55';
+      ctx.lineWidth   = 0.5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(PAD_L, y);
+      ctx.lineTo(PAD_L + plotW, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
-    ctx.setLineDash([]);
 
-    /* value range */
+    // Value range (global, so the scale stays fixed while scrolling)
     let minV = Infinity, maxV = -Infinity;
-    for (const p of visible) {
+    for (const p of signal) {
       if (p.v < minV) minV = p.v;
       if (p.v > maxV) maxV = p.v;
     }
-    const range = maxV - minV || 1;
+    const range  = maxV - minV || 1;
     const margin = range * 0.1;
     minV -= margin;
     maxV += margin;
 
-    const toX = (i) => padL + (i / visible.length) * plotW;
-    const toY = (v) => padT + plotH - ((v - minV) / (maxV - minV)) * plotH;
+    const toX = (idx) => PAD_L + (idx / fs) * pxPerSec;
+    const toY = (v)   => PAD_T + plotH - ((v - minV) / (maxV - minV)) * plotH;
 
-    /* signal line */
+    // ECG signal line
     ctx.strokeStyle = viewMode === 'raw' ? '#5a8aaa' : '#00FFB4';
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth   = 1.4;
     ctx.beginPath();
-    for (let i = 0; i < visible.length; i++) {
+    for (let i = 0; i < signal.length; i++) {
       const x = toX(i);
-      const y = toY(visible[i].v);
+      const y = toY(signal[i].v);
       if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      else         ctx.lineTo(x, y);
     }
     ctx.stroke();
 
-    /* R-peaks */
-    if (viewMode !== 'raw' && data.rPeaks) {
-      const localPeaks = data.rPeaks.filter(p => p >= startIdx && p < endIdx);
+    // R-peak markers
+    if (viewMode !== 'raw' && data.rPeaks && data.rPeaks.length > 0) {
       ctx.fillStyle = '#ff4444';
-      for (const p of localPeaks) {
-        const idx = p - startIdx;
-        const x = toX(idx);
-        const y = toY(visible[idx].v);
+      for (const peakIdx of data.rPeaks) {
+        const x = toX(peakIdx);
+        const y = toY(signal[peakIdx]?.v ?? 0);
         ctx.beginPath();
         ctx.arc(x, y, 4, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    /* x-axis labels */
-    ctx.fillStyle = '#5a8aaa';
-    ctx.font = '10px JetBrains Mono, monospace';
-    ctx.textAlign = 'center';
-    const tStep = Math.max(1, Math.floor(visible.length / 6));
-    for (let i = 0; i < visible.length; i += tStep) {
-      const x = toX(i);
-      ctx.fillText(visible[i].t.toFixed(1) + 's', x, padT + plotH + 18);
+    // X-axis labels (every 1 s, or every 5 s if zoomed out)
+    ctx.fillStyle  = '#5a8aaa';
+    ctx.font       = '10px JetBrains Mono, monospace';
+    ctx.textAlign  = 'center';
+    const labelStep = pxPerSec < 20 ? 5 : 1;
+    for (let t = 0; t <= totalSec; t += labelStep) {
+      const x = PAD_L + t * pxPerSec;
+      ctx.fillText(t.toFixed(0) + 's', x, PAD_T + plotH + 20);
     }
 
-    /* y-axis labels */
+    // Y-axis labels (left side, fixed)
     ctx.textAlign = 'right';
-    const vStep = 4;
-    for (let i = 0; i <= vStep; i++) {
-      const v = minV + ((maxV - minV) / vStep) * i;
+    const vSteps  = 5;
+    for (let i = 0; i <= vSteps; i++) {
+      const v = minV + ((maxV - minV) / vSteps) * i;
       const y = toY(v);
-      ctx.fillText(v.toFixed(1), padL - 5, y + 3);
+      ctx.fillText(v.toFixed(1), PAD_L - 6, y + 3);
     }
 
-    /* border */
+    // Border
     ctx.strokeStyle = '#1a3a55';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(padL, padT, plotW, plotH);
+    ctx.lineWidth   = 1;
+    ctx.strokeRect(PAD_L, PAD_T, plotW, plotH);
 
-    /* axis labels */
-    ctx.fillStyle = '#5a8aaa';
-    ctx.font = '9px Inter, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('Time (s)', padL + plotW / 2 - 20, h - 2);
+    // Axis titles
+    ctx.fillStyle  = '#5a8aaa';
+    ctx.font       = '9px Inter, sans-serif';
+    ctx.textAlign  = 'left';
+    ctx.fillText('Time (s)', PAD_L + plotW / 2 - 20, CANVAS_HEIGHT - 2);
     ctx.save();
-    ctx.translate(8, padT + plotH / 2);
+    ctx.translate(10, PAD_T + plotH / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText(viewMode === 'raw' ? 'Raw ECG' : viewMode === 'normalized' ? 'Normalized' : 'Processed ECG', 0, 0);
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      viewMode === 'raw' ? 'Raw ECG'
+      : viewMode === 'normalized' ? 'Normalized'
+      : 'Processed ECG',
+      0, 0
+    );
     ctx.restore();
-  }, [data, viewMode, zoom, offset, getSignal, getViewLen, clampOffset]);
+  }, [data, viewMode, pxPerSec, getSignal]);
 
   useEffect(() => { draw(); }, [draw]);
 
-  useEffect(() => {
-    const onResize = () => draw();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [draw]);
-
-  /* ── Scrollbar drawing ── */
-  const drawScrollbar = useCallback(() => {
-    const sb = scrollbarRef.current;
-    if (!sb) return;
-    const signal = getSignal();
-    if (signal.length === 0) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const w = sb.clientWidth;
-    const h = sb.clientHeight;
-    sb.width = w * dpr;
-    sb.height = h * dpr;
-    const ctx = sb.getContext('2d');
-    ctx.scale(dpr, dpr);
-
-    /* track */
-    ctx.fillStyle = '#0a1828';
-    ctx.beginPath();
-    ctx.roundRect(0, 0, w, h, 4);
-    ctx.fill();
-
-    /* thumb */
-    const thumbRatio = 1 / zoom;
-    const thumbW = Math.max(30, w * thumbRatio);
-    const maxScroll = w - thumbW;
-    const maxOff = getMaxOffset();
-    const thumbX = maxOff > 0 ? (clampOffset(offset) / maxOff) * maxScroll : 0;
-
-    ctx.fillStyle = '#00FFB440';
-    ctx.beginPath();
-    ctx.roundRect(thumbX, 1, thumbW, h - 2, 3);
-    ctx.fill();
-
-    ctx.strokeStyle = '#00FFB480';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(thumbX, 1, thumbW, h - 2, 3);
-    ctx.stroke();
-  }, [zoom, offset, getSignal, getMaxOffset, clampOffset]);
-
-  useEffect(() => { drawScrollbar(); }, [drawScrollbar]);
-
-  /* ── Mouse drag on canvas ── */
-  const handleMouseDown = useCallback((e) => {
-    isDragging.current = true;
-    dragStartX.current = e.clientX;
-    dragStartOffset.current = offset;
-    e.currentTarget.style.cursor = 'grabbing';
-  }, [offset]);
-
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dx = e.clientX - dragStartX.current;
-    const signal = getSignal();
-    const viewLen = getViewLen();
-    const plotW = canvas.clientWidth - 70; // padL + padR
-    const pointsPerPx = viewLen / plotW;
-    const newOffset = dragStartOffset.current - dx * pointsPerPx;
-    setOffset(clampOffset(Math.round(newOffset)));
-  }, [getSignal, getViewLen, clampOffset]);
-
-  const handleMouseUp = useCallback((e) => {
-    isDragging.current = false;
-    if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
-  }, []);
-
-  useEffect(() => {
-    const onUp = () => { isDragging.current = false; isScrollbarDrag.current = false; };
-    window.addEventListener('mouseup', onUp);
-    return () => window.removeEventListener('mouseup', onUp);
-  }, []);
-
-  /* ── Wheel zoom (zoom into cursor position) ── */
+  // ── wheel zoom — keeps the point under cursor in place ────────────────
   const handleWheel = useCallback((e) => {
     e.preventDefault();
+    const container = containerRef.current;
+    if (!container || !data) return;
+
     const signal = getSignal();
-    if (signal.length === 0) return;
+    if (!signal || signal.length === 0) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const rect      = container.getBoundingClientRect();
+    const mouseX    = e.clientX - rect.left;                      // px in container
+    const scrolledX = container.scrollLeft + mouseX - PAD_L;     // px in plot area
+    const timeSec   = scrolledX / pxPerSec;                       // seconds under cursor
 
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const padL = 50, padR = 20;
-    const plotW = canvas.clientWidth - padL - padR;
-    const relX = Math.max(0, Math.min(1, (mouseX - padL) / plotW));
+    const factor     = e.deltaY < 0 ? 1.25 : 0.8;
+    const newPxPerSec = Math.max(MIN_PX_PER_SEC, Math.min(MAX_PX_PER_SEC, pxPerSec * factor));
 
-    const oldZoom = zoom;
-    let newZoom;
-    if (e.deltaY < 0) newZoom = Math.min(20, oldZoom * 1.2);
-    else newZoom = Math.max(1, oldZoom / 1.2);
+    // After zoom, scroll so the same second stays under cursor
+    const newScrolledX = timeSec * newPxPerSec;
+    const newScrollLeft = newScrolledX + PAD_L - mouseX;
 
-    /* keep the point under cursor stable */
-    const oldViewLen = Math.floor(signal.length / oldZoom);
-    const newViewLen = Math.floor(signal.length / newZoom);
-    const cursorIdx = offset + relX * oldViewLen;
-    const newOffset = Math.round(cursorIdx - relX * newViewLen);
+    setPxPerSec(newPxPerSec);
 
-    setZoom(newZoom);
-    setOffset(Math.max(0, Math.min(signal.length - newViewLen, newOffset)));
-  }, [zoom, offset, getSignal]);
+    // Apply scroll position AFTER state update & repaint
+    requestAnimationFrame(() => {
+      if (containerRef.current) {
+        containerRef.current.scrollLeft = Math.max(0, newScrollLeft);
+      }
+    });
+  }, [pxPerSec, data, getSignal]);
 
-  /* ── Scrollbar drag ── */
-  const handleScrollbarDown = useCallback((e) => {
-    isScrollbarDrag.current = true;
-    const sb = scrollbarRef.current;
-    if (!sb) return;
-    const rect = sb.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const w = sb.clientWidth;
-    const thumbRatio = 1 / zoom;
-    const thumbW = Math.max(30, w * thumbRatio);
-    const maxScroll = w - thumbW;
-    const ratio = Math.max(0, Math.min(1, (x - thumbW / 2) / maxScroll));
-    setOffset(clampOffset(Math.round(ratio * getMaxOffset())));
-    dragStartX.current = e.clientX;
-  }, [zoom, clampOffset, getMaxOffset]);
+  // Attach wheel with { passive: false } to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
 
-  const handleScrollbarMove = useCallback((e) => {
-    if (!isScrollbarDrag.current) return;
-    const sb = scrollbarRef.current;
-    if (!sb) return;
-    const rect = sb.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const w = sb.clientWidth;
-    const thumbRatio = 1 / zoom;
-    const thumbW = Math.max(30, w * thumbRatio);
-    const maxScroll = w - thumbW;
-    const ratio = Math.max(0, Math.min(1, (x - thumbW / 2) / maxScroll));
-    setOffset(clampOffset(Math.round(ratio * getMaxOffset())));
-  }, [zoom, clampOffset, getMaxOffset]);
-
-  /* ── Touch support for mobile ── */
-  const handleTouchStart = useCallback((e) => {
-    if (e.touches.length === 1) {
-      isDragging.current = true;
-      dragStartX.current = e.touches[0].clientX;
-      dragStartOffset.current = offset;
-    }
-  }, [offset]);
-
-  const handleTouchMove = useCallback((e) => {
-    if (!isDragging.current || e.touches.length !== 1) return;
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dx = e.touches[0].clientX - dragStartX.current;
-    const viewLen = getViewLen();
-    const plotW = canvas.clientWidth - 70;
-    const pointsPerPx = viewLen / plotW;
-    const newOffset = dragStartOffset.current - dx * pointsPerPx;
-    setOffset(clampOffset(Math.round(newOffset)));
-  }, [getViewLen, clampOffset]);
-
-  const handleTouchEnd = useCallback(() => {
-    isDragging.current = false;
-  }, []);
-
-  /* ── Keyboard arrow support ── */
-  const panStep = useCallback(() => Math.max(1, Math.floor(getViewLen() * 0.25)), [getViewLen]);
-
+  // ── loading / error states ─────────────────────────────────────────────
   if (loading) return (
-    <div className="card p-8 flex items-center justify-center"><Loader2 size={24} className="animate-spin text-primary-400" /></div>
+    <div className="card p-8 flex items-center justify-center">
+      <Loader2 size={24} className="animate-spin text-primary-400" />
+    </div>
   );
   if (error) return (
     <div className="card p-6">
-      <div className="flex items-center gap-2 text-red-400"><AlertCircle size={18} /><span className="text-sm">{error}</span></div>
+      <div className="flex items-center gap-2 text-red-400">
+        <AlertCircle size={18} />
+        <span className="text-sm">{error}</span>
+      </div>
     </div>
   );
   if (!data) return null;
 
-  const pred = data.prediction;
+  const pred          = data.prediction;
   const severityColor = SEVERITY_COLORS[pred?.severity] || '#c8d8e8';
-  const evidence = pred ? CLINICAL_EVIDENCE[pred.class] : null;
-  const signal = getSignal();
-  const totalDur = signal.length / (data.fs || 360);
-  const viewDur = (getViewLen() / (data.fs || 360));
-  const currentStart = (clampOffset(offset) / (data.fs || 360));
+  const evidence      = pred ? CLINICAL_EVIDENCE[pred.class] : null;
+  const signal        = getSignal();
+  const fs            = data.fs || 360;
+  const totalDur      = signal.length / fs;
+
+  const zoomIn  = () => {
+    const c = containerRef.current;
+    const midTime = c ? ((c.scrollLeft + c.clientWidth / 2 - PAD_L) / pxPerSec) : 0;
+    const newPps  = Math.min(MAX_PX_PER_SEC, pxPerSec * 1.5);
+    setPxPerSec(newPps);
+    requestAnimationFrame(() => {
+      if (containerRef.current)
+        containerRef.current.scrollLeft = midTime * newPps + PAD_L - containerRef.current.clientWidth / 2;
+    });
+  };
+
+  const zoomOut = () => {
+    const c = containerRef.current;
+    const midTime = c ? ((c.scrollLeft + c.clientWidth / 2 - PAD_L) / pxPerSec) : 0;
+    const newPps  = Math.max(MIN_PX_PER_SEC, pxPerSec / 1.5);
+    setPxPerSec(newPps);
+    requestAnimationFrame(() => {
+      if (containerRef.current)
+        containerRef.current.scrollLeft = midTime * newPps + PAD_L - containerRef.current.clientWidth / 2;
+    });
+  };
+
+  const fitAll = () => {
+    const c = containerRef.current;
+    if (!c) return;
+    // choose pxPerSec so the whole signal fills the container width
+    const availW = c.clientWidth - PAD_L - PAD_R;
+    const fit    = Math.max(MIN_PX_PER_SEC, availW / totalDur);
+    setPxPerSec(fit);
+    requestAnimationFrame(() => { if (containerRef.current) containerRef.current.scrollLeft = 0; });
+  };
 
   return (
     <div className="card p-4 md:p-6">
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-500 to-green-500 flex items-center justify-center">
@@ -382,36 +312,23 @@ export default function ECGViewer({ sessionId, onClose }) {
           <div>
             <h3 className="text-lg font-semibold text-[var(--text-primary)]">ECG Viewer</h3>
             <p className="text-xs text-[var(--text-tertiary)]">
-              Session #{data.sessionId} &middot; {data.startedAt ? new Date(data.startedAt).toLocaleString() : ''} &middot; ~{data.fs} Hz
+              Session #{data.sessionId}&nbsp;&middot;&nbsp;
+              {data.startedAt ? new Date(data.startedAt).toLocaleString() : ''}&nbsp;&middot;&nbsp;
+              ~{data.fs} Hz&nbsp;&middot;&nbsp;{totalDur.toFixed(1)}s total
             </p>
           </div>
         </div>
         <div className="flex gap-1 items-center">
-          <button onClick={() => {
-            const signal = getSignal();
-            const oldViewLen = getViewLen();
-            const newZoom = Math.min(20, zoom * 1.5);
-            const newViewLen = Math.floor(signal.length / newZoom);
-            const center = offset + oldViewLen / 2;
-            setZoom(newZoom);
-            setOffset(clampOffset(Math.round(center - newViewLen / 2)));
-          }} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]" title="Zoom in"><ZoomIn size={16} /></button>
-          <button onClick={() => {
-            const signal = getSignal();
-            const oldViewLen = getViewLen();
-            const newZoom = Math.max(1, zoom / 1.5);
-            const newViewLen = Math.floor(signal.length / newZoom);
-            const center = offset + oldViewLen / 2;
-            setZoom(newZoom);
-            setOffset(clampOffset(Math.round(center - newViewLen / 2)));
-          }} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]" title="Zoom out"><ZoomOut size={16} /></button>
-          <button onClick={() => { setOffset(0); setZoom(1); }} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] text-xs font-medium" title="Reset view">Fit</button>
+          <button onClick={zoomIn}  className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]" title="Zoom in"><ZoomIn  size={16} /></button>
+          <button onClick={zoomOut} className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]" title="Zoom out"><ZoomOut size={16} /></button>
+          <button onClick={fitAll}  className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] text-xs font-medium" title="Fit all">Fit</button>
           {onClose && (
             <button onClick={onClose} className="p-2 rounded-lg hover:bg-red-500/10 text-red-400 text-xs">Close</button>
           )}
         </div>
       </div>
 
+      {/* ── Prediction banner ── */}
       {pred && (
         <div className="mb-4 p-4 rounded-xl" style={{ backgroundColor: severityColor + '15', borderColor: severityColor + '30', borderWidth: 1 }}>
           <div className="flex items-start gap-3">
@@ -431,69 +348,56 @@ export default function ECGViewer({ sessionId, onClose }) {
         </div>
       )}
 
+      {/* ── View mode tabs ── */}
       <div className="flex gap-1 mb-3 p-1 rounded-lg bg-[var(--bg-tertiary)] w-fit">
         {[
-          { key: 'raw', label: 'Raw' },
-          { key: 'processed', label: 'Processed' },
+          { key: 'raw',        label: 'Raw' },
+          { key: 'processed',  label: 'Processed' },
           { key: 'normalized', label: 'AI Input' },
         ].map(m => (
-          <button key={m.key} onClick={() => { setViewMode(m.key); setOffset(0); setZoom(1); }}
+          <button key={m.key}
+            onClick={() => setViewMode(m.key)}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${viewMode === m.key ? 'bg-[var(--card-bg)] shadow-sm text-primary-400' : 'text-[var(--text-secondary)]'}`}>
             {m.label}
           </button>
         ))}
       </div>
 
-      <div className="relative">
-        {/* Navigation bar */}
-        <div className="flex items-center gap-1 mb-1">
-          <button onClick={() => setOffset(o => clampOffset(o - panStep()))}
-            className="p-1 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]"><ChevronLeft size={14} /></button>
-          <span className="text-xs text-[var(--text-tertiary)] flex-1 text-center">
-            {currentStart.toFixed(1)}s – {(currentStart + viewDur).toFixed(1)}s of {totalDur.toFixed(1)}s &middot; Zoom: {zoom.toFixed(1)}x &middot; {signal.length} pts
-          </span>
-          <button onClick={() => setOffset(o => clampOffset(o + panStep()))}
-            className="p-1 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]"><ChevronRight size={14} /></button>
-        </div>
-
-        {/* Canvas */}
-        <canvas
-          ref={canvasRef}
-          className="w-full rounded-xl border border-[var(--border-color)]"
-          style={{ height: '320px', background: '#060e1a', cursor: 'grab' }}
-          onWheel={handleWheel}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        />
-
-        {/* Scrollbar track */}
-        <canvas
-          ref={scrollbarRef}
-          className="w-full mt-1 rounded"
-          style={{ height: '10px', cursor: 'pointer' }}
-          onMouseDown={handleScrollbarDown}
-          onMouseMove={handleScrollbarMove}
-          onMouseUp={() => { isScrollbarDrag.current = false; }}
-        />
-
-        <div className="text-xs text-[var(--text-tertiary)] text-center mt-1">
-          Drag to scroll &middot; Scroll wheel to zoom &middot; Red dots = R-peaks
-        </div>
+      {/* ── Zoom hint ── */}
+      <div className="flex items-center justify-between mb-1 px-1">
+        <span className="text-xs text-[var(--text-tertiary)]">
+          {pxPerSec.toFixed(0)} px/s &middot; scroll horizontally or drag scrollbar to pan
+        </span>
+        <span className="text-xs text-[var(--text-tertiary)]">
+          Scroll&nbsp;wheel&nbsp;=&nbsp;zoom &middot; Red dots&nbsp;=&nbsp;R-peaks
+        </span>
       </div>
 
+      {/* ── Scrollable canvas container ── */}
+      <div
+        ref={containerRef}
+        className="rounded-xl border border-[var(--border-color)] overflow-x-auto overflow-y-hidden"
+        style={{
+          background:    '#060e1a',
+          height:        `${CANVAS_HEIGHT}px`,
+          cursor:        'default',
+          WebkitOverflowScrolling: 'touch',   // smooth on iOS
+          scrollbarWidth: 'thin',             // Firefox
+          scrollbarColor: '#00FFB460 #0a1828',
+        }}
+      >
+        <canvas ref={canvasRef} style={{ display: 'block' }} />
+      </div>
+
+      {/* ── Stats strip ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
         {[
           { label: 'Sample Rate', value: `~${data.fs} Hz` },
-          { label: 'Duration', value: `${totalDur.toFixed(1)}s` },
-          { label: 'R-Peaks', value: data.rPeaks?.length || 0 },
-          { label: 'Heart Rate', value: data.rPeaks?.length > 0
-            ? Math.round(data.rPeaks.length / totalDur * 60) + ' BPM'
-            : 'N/A' },
+          { label: 'Duration',    value: `${totalDur.toFixed(1)}s` },
+          { label: 'R-Peaks',     value: data.rPeaks?.length || 0 },
+          { label: 'Heart Rate',  value: data.rPeaks?.length > 0
+              ? Math.round(data.rPeaks.length / totalDur * 60) + ' BPM'
+              : 'N/A' },
         ].map((s, i) => (
           <div key={i} className="p-3 rounded-xl bg-[var(--bg-secondary)] text-center">
             <div className="text-xs text-[var(--text-tertiary)]">{s.label}</div>
