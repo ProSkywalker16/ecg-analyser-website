@@ -54,7 +54,6 @@ export default function ECGViewer({ sessionId, onClose }) {
   const getSignal = useCallback(() => {
     if (!data) return [];
     if (viewMode === 'raw') return data.raw;
-    if (viewMode === 'normalized') return data.normalized;
     return data.processed;
   }, [data, viewMode]);
 
@@ -151,7 +150,7 @@ export default function ECGViewer({ sessionId, onClose }) {
     ctx.stroke();
 
     // R-peak markers
-    const peaks = viewMode === 'normalized' ? (data.rPeaksNorm || []) : (data.rPeaks || []);
+    const peaks = data.rPeaks || [];
     if (viewMode !== 'raw' && peaks.length > 0) {
       ctx.fillStyle = '#ff4444';
       for (const peakIdx of peaks) {
@@ -196,12 +195,7 @@ export default function ECGViewer({ sessionId, onClose }) {
     ctx.translate(10, PAD_T + plotH / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
-    ctx.fillText(
-      viewMode === 'raw' ? 'Raw ECG'
-      : viewMode === 'normalized' ? 'Normalized'
-      : 'Processed ECG',
-      0, 0
-    );
+    ctx.fillText(viewMode === 'raw' ? 'Raw ECG' : 'Processed ECG', 0, 0);
     ctx.restore();
   }, [data, viewMode, pxPerSec, getSignal]);
 
@@ -352,9 +346,8 @@ export default function ECGViewer({ sessionId, onClose }) {
       {/* ── View mode tabs ── */}
       <div className="flex gap-1 mb-3 p-1 rounded-lg bg-[var(--bg-tertiary)] w-fit">
         {[
-          { key: 'raw',        label: 'Raw' },
-          { key: 'processed',  label: 'Processed' },
-          { key: 'normalized', label: 'AI Inference' },
+          { key: 'raw',       label: 'Raw' },
+          { key: 'processed', label: 'Processed' },
         ].map(m => (
           <button key={m.key}
             onClick={() => setViewMode(m.key)}

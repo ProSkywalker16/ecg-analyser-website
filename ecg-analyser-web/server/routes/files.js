@@ -5,8 +5,7 @@ import { parse } from 'csv-parse/sync';
 import { URL } from 'url';
 import {
   baselineWanderRemoval, lowpassFilter, notchFilter, normalize,
-  extractCentralWindow, resampleTo, findRPeaks,
-  CLASS_MAP, CLINICAL_GUIDANCE, SEVERITY_LABEL,
+  findRPeaks, CLASS_MAP, CLINICAL_GUIDANCE, SEVERITY_LABEL,
 } from '../dsp.js';
 
 const ALLOWED_STORAGE_HOSTS = [
@@ -137,20 +136,9 @@ router.get('/csv/:sessionId/processed', async (req, res) => {
     const fullLp         = lowpassFilter(fullFiltered, fs, 40, 2);
     const fullNotched    = notchFilter(fullLp, fs, 50, 30);
 
-    // ── AI window: central 5-s crop → resample to 1800 pts ──────────────
-    const { signal: windowed, timestamps: tsWindow } = extractCentralWindow(sig, timestamps);
-    const winFiltered  = baselineWanderRemoval(windowed, fs);
-    const winLp        = lowpassFilter(winFiltered, fs, 40, 2);
-    const winNotched   = notchFilter(winLp, fs, 50, 30);
-    const winNorm      = normalize(winNotched);
-    const resampled    = resampleTo(winNorm, 1800);
-
     // ── R-peaks on full processed signal at real fs ──────────────────────
-    const fullNorm    = normalize(fullNotched);
-    const rPeaks      = findRPeaks(fullNorm, fs);
-
-    // ── R-peaks on the 1800-pt resampled signal at 360 Hz ────────────────
-    const rPeaksNorm  = findRPeaks(resampled, 360);
+    const fullNorm = normalize(fullNotched);
+    const rPeaks   = findRPeaks(fullNorm, fs);
 
     const predClass = session.prediction ? CLASS_MAP.indexOf(session.prediction) : -1;
     const guidance  = predClass >= 0 && predClass < CLINICAL_GUIDANCE.length
@@ -167,12 +155,6 @@ router.get('/csv/:sessionId/processed', async (req, res) => {
     for (let i = 0; i < fullNotched.length; i++) {
       processedExport.push({ t: parseFloat(timestamps[i].toFixed(3)), v: parseFloat(fullNotched[i].toFixed(2)) });
     }
-    // normalized → AI 1800-pt window only
-    const normExport = [];
-    for (let i = 0; i < resampled.length; i++) {
-      const tBase = tsWindow.length > 0 ? tsWindow[0] : 0;
-      normExport.push({ t: parseFloat((tBase + i / 360).toFixed(3)), v: parseFloat(resampled[i].toFixed(4)) });
-    }
 
     res.json({
       sessionId: session.id,
@@ -180,9 +162,7 @@ router.get('/csv/:sessionId/processed', async (req, res) => {
       fs: parseFloat(fs.toFixed(1)),
       raw: rawExport,
       processed: processedExport,
-      normalized: normExport,
       rPeaks,
-      rPeaksNorm,
       prediction: guidance,
     });
   } catch (error) {
