@@ -132,33 +132,43 @@ router.get('/csv/:sessionId/processed', async (req, res) => {
     const fs = timestamps.length / (timestamps[timestamps.length - 1] - timestamps[0]);
     const sig = new Float64Array(rawSignal);
 
+    // ── Full-signal processing (raw + processed views use ALL data) ────────
+    const fullFiltered   = baselineWanderRemoval(sig, fs);
+    const fullLp         = lowpassFilter(fullFiltered, fs, 40, 2);
+    const fullNotched    = notchFilter(fullLp, fs, 50, 30);
+
+    // ── AI window: central 5-s crop → resample to 1800 pts ──────────────
     const { signal: windowed, timestamps: tsWindow } = extractCentralWindow(sig, timestamps);
-    if (windowed.length === 0) return res.status(400).json({ error: 'No valid window after stabilization' });
+    const winFiltered  = baselineWanderRemoval(windowed, fs);
+    const winLp        = lowpassFilter(winFiltered, fs, 40, 2);
+    const winNotched   = notchFilter(winLp, fs, 50, 30);
+    const winNorm      = normalize(winNotched);
+    const resampled    = resampleTo(winNorm, 1800);
 
-    const filtered = baselineWanderRemoval(windowed, fs);
-    const lpFiltered = lowpassFilter(filtered, fs, 40, 2);
-    const notched = notchFilter(lpFiltered, fs, 50, 30);
-    const norm = normalize(notched);
-
-    const resampled = resampleTo(norm, 1800);
-    const rPeaks = findRPeaks(resampled, 360);
+    // ── R-peaks on full processed signal at real fs ──────────────────────
+    const fullNorm   = normalize(fullNotched);
+    const rPeaks     = findRPeaks(fullNorm, fs);
 
     const predClass = session.prediction ? CLASS_MAP.indexOf(session.prediction) : -1;
-    const guidance = predClass >= 0 && predClass < CLINICAL_GUIDANCE.length
+    const guidance  = predClass >= 0 && predClass < CLINICAL_GUIDANCE.length
       ? { ...CLINICAL_GUIDANCE[predClass], class: session.prediction, confidence: session.confidence, severityLabel: SEVERITY_LABEL[CLINICAL_GUIDANCE[predClass].severity] }
       : null;
 
+    // raw  → full original signal
     const rawExport = [];
-    for (let i = 0; i < windowed.length; i++) {
-      rawExport.push({ t: parseFloat(tsWindow[i].toFixed(3)), v: parseFloat(windowed[i].toFixed(2)) });
+    for (let i = 0; i < sig.length; i++) {
+      rawExport.push({ t: parseFloat(timestamps[i].toFixed(3)), v: parseFloat(sig[i].toFixed(2)) });
     }
+    // processed → full filtered signal
     const processedExport = [];
-    for (let i = 0; i < notched.length; i++) {
-      processedExport.push({ t: parseFloat(tsWindow[i].toFixed(3)), v: parseFloat(notched[i].toFixed(2)) });
+    for (let i = 0; i < fullNotched.length; i++) {
+      processedExport.push({ t: parseFloat(timestamps[i].toFixed(3)), v: parseFloat(fullNotched[i].toFixed(2)) });
     }
+    // normalized → AI 1800-pt window only
     const normExport = [];
     for (let i = 0; i < resampled.length; i++) {
-      normExport.push({ t: parseFloat((i / 360).toFixed(3)), v: parseFloat(resampled[i].toFixed(4)) });
+      const tBase = tsWindow.length > 0 ? tsWindow[0] : 0;
+      normExport.push({ t: parseFloat((tBase + i / 360).toFixed(3)), v: parseFloat(resampled[i].toFixed(4)) });
     }
 
     res.json({
