@@ -127,7 +127,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
   startKeepAlive();
 });
-
+/* I deactivated this function to prevent free tier runout but it actually works
 // ─── Keep-Alive Self-Ping ────────────────────────────────────────────────────
 // Render's free tier spins down after 15 min of inactivity.
 // This pings /api/health every 12 minutes to keep the instance warm.
@@ -159,3 +159,4 @@ function startKeepAlive() {
   setInterval(ping, interval);
   console.log(`[keep-alive] Self-ping scheduled every 12 min → ${pingUrl}`);
 }
+*/
