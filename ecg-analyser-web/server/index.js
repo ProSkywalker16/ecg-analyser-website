@@ -1,4 +1,6 @@
 import express from 'express';
+import https from 'https';
+import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -123,4 +125,37 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
+  startKeepAlive();
 });
+
+// ─── Keep-Alive Self-Ping ────────────────────────────────────────────────────
+// Render's free tier spins down after 15 min of inactivity.
+// This pings /api/health every 12 minutes to keep the instance warm.
+function startKeepAlive() {
+  // RENDER_EXTERNAL_URL is automatically set by Render in production.
+  // Falls back to SERVER_URL in .env for other platforms.
+  const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.SERVER_URL;
+
+  if (!baseUrl) {
+    console.log('[keep-alive] No RENDER_EXTERNAL_URL or SERVER_URL set — skipping self-ping (dev mode).');
+    return;
+  }
+
+  const pingUrl = `${baseUrl.replace(/\/$/, '')}/api/health`;
+  const interval = 12 * 60 * 1000; // 12 minutes in ms
+
+  const ping = () => {
+    const client = pingUrl.startsWith('https') ? https : http;
+    const req = client.get(pingUrl, (res) => {
+      console.log(`[keep-alive] Pinged ${pingUrl} → HTTP ${res.statusCode}`);
+    });
+    req.on('error', (err) => {
+      console.warn(`[keep-alive] Ping failed: ${err.message}`);
+    });
+    req.end();
+  };
+
+  // First ping after 12 minutes, then repeat
+  setInterval(ping, interval);
+  console.log(`[keep-alive] Self-ping scheduled every 12 min → ${pingUrl}`);
+}
