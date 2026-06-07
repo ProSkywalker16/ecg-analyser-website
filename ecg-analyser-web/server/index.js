@@ -90,8 +90,8 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/', apiLimiter);
 
-// Trust first proxy
-app.set('trust proxy', 1);
+// Trust proxy — needed for real client IP behind Cloudflare / hosting load balancers
+app.set('trust proxy', true);
 
 // Global error sanitization
 function sanitizeError(err) {

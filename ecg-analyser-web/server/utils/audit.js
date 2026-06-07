@@ -17,8 +17,30 @@ export async function logAuditEvent({ eventType, patientId, details, ip, userAge
 }
 
 export function getReqMeta(req) {
+  let ip = req.ip;
+
+  if (!ip || ip === req.socket?.remoteAddress) {
+    const cf = req.headers['cf-connecting-ip'];
+    if (cf) {
+      ip = cf;
+    } else {
+      const forwarded = req.headers['x-forwarded-for'];
+      if (forwarded) {
+        ip = forwarded.split(',')[0].trim();
+      }
+    }
+  }
+
+  if (!ip || ip === req.socket?.remoteAddress) {
+    ip = req.socket?.remoteAddress;
+  }
+
+  if (typeof ip === 'string' && ip.startsWith('::ffff:')) {
+    ip = ip.substring(7);
+  }
+
   return {
-    ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+    ip: ip || 'unknown',
     userAgent: req.headers['user-agent'],
     method: req.method,
     url: req.originalUrl,
