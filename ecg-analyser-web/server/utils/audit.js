@@ -1,5 +1,18 @@
 import { supabase } from '../index.js';
 
+function isPrivateIP(ip) {
+  if (!ip) return true;
+  const s = ip.replace('::ffff:', '');
+  const parts = s.split('.').map(Number);
+  if (parts.length !== 4) return false;
+  if (parts[0] === 10) return true;
+  if (parts[0] === 127) return true;
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true; // CGNAT
+  return false;
+}
+
 export async function logAuditEvent({ eventType, patientId, details, ip, userAgent, method, url }) {
   try {
     await supabase.from('audit_logs').insert({
@@ -19,7 +32,7 @@ export async function logAuditEvent({ eventType, patientId, details, ip, userAge
 export function getReqMeta(req) {
   let ip = req.ip;
 
-  if (!ip || ip === req.socket?.remoteAddress) {
+  if (!ip || isPrivateIP(ip)) {
     const cf = req.headers['cf-connecting-ip'];
     if (cf) {
       ip = cf;
