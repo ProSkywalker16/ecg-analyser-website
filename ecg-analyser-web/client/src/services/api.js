@@ -34,6 +34,9 @@ export const authService = {
       method: 'POST',
       body: JSON.stringify({ name, password, passcode }),
     }),
+
+  logout: () =>
+    request('/auth/logout', { method: 'POST' }),
 };
 
 export const patientService = {
@@ -57,6 +60,53 @@ export const filesService = {
   listSessions: () => request('/files/sessions'),
 
   fetchProcessedCSV: (sessionId) => request(`/files/csv/${sessionId}/processed`),
+};
+
+export const adminService = {
+  getStats: () => request('/admin/stats'),
+
+  getPatients: (search, page = 1, pageSize = 50) => request(`/admin/patients?page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
+
+  getPatientSessions: (patientId) => request(`/admin/patients/${patientId}/sessions`),
+
+  updatePatient: (patientId, data) =>
+    request(`/admin/patients/${patientId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  createPatient: (data) =>
+    request('/admin/patients', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  deletePatient: (patientId) =>
+    request(`/admin/patients/${patientId}`, { method: 'DELETE' }),
+
+  verifySession: (sessionId, validatedPrediction, notes) =>
+    request(`/admin/sessions/${sessionId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ validatedPrediction, notes }),
+    }),
+
+  getLogs: (search, page = 1, pageSize = 50, eventType = '') =>
+    request(`/admin/logs?page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${eventType ? `&eventType=${encodeURIComponent(eventType)}` : ''}`),
+
+  exportLogsCsv: async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE}/admin/logs/export`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Export failed');
+    }
+    return res.blob();
+  },
+
+  clearLogs: () =>
+    request('/admin/logs', { method: 'DELETE' }),
 };
 
 export function getFileUrl(url) {

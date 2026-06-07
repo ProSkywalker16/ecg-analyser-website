@@ -147,3 +147,52 @@ BEGIN
     LIMIT 1;
 END;
 $$;
+
+-- ============================================================
+-- Admin / Superuser Role Migration
+-- ============================================================
+
+-- 1. Add role column to patients table
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'patient';
+
+-- 2. Create index on role for faster lookups
+CREATE INDEX IF NOT EXISTS idx_patients_role ON patients(role);
+
+-- 3. Update get_user_hashes to return role as well
+DROP FUNCTION IF EXISTS get_user_hashes(TEXT);
+CREATE OR REPLACE FUNCTION get_user_hashes(p_name TEXT)
+RETURNS TABLE(r_password_hash TEXT, r_passcode_hash TEXT, r_role TEXT)
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY SELECT password_hash, passcode_hash, role::text FROM patients WHERE name = p_name LIMIT 1;
+END;
+$$;
+
+-- ============================================================
+-- Audit Logs Table for IP Tracking
+-- ============================================================
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  event_type VARCHAR(20) NOT NULL DEFAULT 'api_request',
+  ip_address VARCHAR(45) NOT NULL,
+  http_method VARCHAR(10) NOT NULL,
+  request_url TEXT NOT NULL,
+  user_agent TEXT,
+  patient_id INT REFERENCES patients(id) ON DELETE SET NULL,
+  details TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "anon_deny_audit_logs" ON audit_logs;
+CREATE POLICY "anon_deny_audit_logs" ON audit_logs FOR SELECT TO anon USING (false);
+
+-- Add event_type and details to existing table if upgrading
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS event_type VARCHAR(20) DEFAULT 'api_request';
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details TEXT;
+
+-- ============================================================
+-- Promote first admin user (update username as needed)
+-- ============================================================
+-- UPDATE patients SET role = 'admin' WHERE name = 'YourAdminUsername';

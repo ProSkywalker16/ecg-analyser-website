@@ -102,3 +102,8 @@ desktop.ini
 *.docx.tmp
 *.html
 !ecg-analyser-web/client/index.html
+
+# ------------------------------------------------------------------------------
+# 10. Admin Implementation Plans & Guides (Sensitive Architecture)
+# ------------------------------------------------------------------------------
+admin_system_implementation_plan.md

@@ -12,6 +12,7 @@ import WebSocket from 'ws';
 import authRoutes from './routes/auth.js';
 import patientRoutes from './routes/patients.js';
 import fileRoutes from './routes/files.js';
+import adminRoutes from './routes/admin.js';
 
 dotenv.config();
 
@@ -103,6 +104,7 @@ function sanitizeError(err) {
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Serve built client in production
 const __filename = fileURLToPath(import.meta.url);
@@ -112,7 +114,7 @@ const clientDist = join(__dirname, '..', 'client', 'dist');
 if (!isDev) {
   app.use(express.static(clientDist));
   app.get('*', (req, res) => {
-    if (req.path.startsWith('/api')) return next();
+    if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
     res.sendFile(join(clientDist, 'index.html'));
   });
 }

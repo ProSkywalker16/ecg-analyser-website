@@ -22,8 +22,8 @@ export default function Navbar() {
     setMobileOpen(false);
   }, [location]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
   };
 

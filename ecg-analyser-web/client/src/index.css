@@ -228,6 +228,85 @@
   color: #6366f1;
 }
 
+/* ── Admin Theme (Orangish-White / Blackish-Orange) ──────────── */
+.admin-theme {
+  --bg-primary: #fdf6f0;
+  --bg-secondary: #faece0;
+  --bg-tertiary: #f5dcc8;
+  --text-primary: #2a1a0e;
+  --text-secondary: #5a4030;
+  --text-tertiary: #8a7060;
+  --border-color: #e0c8b8;
+  --card-bg: #ffffff;
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --nav-bg: rgba(253, 246, 240, 0.9);
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --hero-text: #2a1a0e;
+  --hero-text-muted: #5a4030;
+  --hero-text-faint: #8a7060;
+  --hero-glass-text: #6a5040;
+  --hero-glass-bg: rgba(255, 255, 255, 0.5);
+  color-scheme: light;
+}
+
+.dark .admin-theme {
+  --bg-primary: #0f0806;
+  --bg-secondary: #1a0f0c;
+  --bg-tertiary: #2a1a14;
+  --text-primary: #f5ede8;
+  --text-secondary: #c4b5a8;
+  --text-tertiary: #8a7a6e;
+  --border-color: #3a2820;
+  --card-bg: #1f1210;
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --nav-bg: rgba(15, 8, 6, 0.92);
+  --glass-bg: rgba(31, 18, 16, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --hero-text: #f5ede8;
+  --hero-text-muted: rgba(245, 237, 232, 0.7);
+  --hero-text-faint: rgba(245, 237, 232, 0.4);
+  --hero-glass-text: rgba(245, 237, 232, 0.5);
+  --hero-glass-bg: rgba(31, 18, 16, 0.4);
+  color-scheme: dark;
+}
+
+.admin-theme .card {
+  border-color: var(--border-color);
+}
+
+.admin-theme .input-field {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.admin-theme ::selection {
+  background: #ea580c;
+  color: white;
+}
+
+.admin-theme .btn-primary {
+  background: linear-gradient(135deg, #ea580c, #c2410c);
+}
+
+.admin-theme .btn-primary:hover {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+}
+
+.admin-theme .gradient-text {
+  background: linear-gradient(135deg, #f97316, #fb923c);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.admin-theme .ecg-grid-bg {
+  background-image:
+    linear-gradient(rgba(234, 88, 12, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(234, 88, 12, 0.04) 1px, transparent 1px);
+}
+
 @keyframes fadeInUp {
   0% { opacity: 0; transform: translateY(30px); }
   100% { opacity: 1; transform: translateY(0); }

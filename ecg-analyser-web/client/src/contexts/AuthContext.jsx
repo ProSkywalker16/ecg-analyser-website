@@ -28,10 +28,11 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     setInactivityWarning(false);
+    try { await authService.logout(); } catch {}
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');

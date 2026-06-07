@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import AdminDashboard from '../components/AdminDashboard/AdminDashboard';
 import ThemeToggle from '../components/ThemeToggle';
 import PatientProfile from '../components/Dashboard/PatientProfile';
 import ProfileEditor from '../components/Dashboard/ProfileEditor';
@@ -15,6 +16,11 @@ import {
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
+
+  if (user?.role === 'admin') {
+    return <AdminDashboard />;
+  }
+
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -36,7 +42,7 @@ export default function DashboardPage() {
     }
   }, [activeTab]);
 
-  const handleLogout = () => { logout(); navigate('/'); };
+  const handleLogout = async () => { await logout(); navigate('/'); };
 
   const handleProfileUpdate = () => setRefreshKey(k => k + 1);
 
