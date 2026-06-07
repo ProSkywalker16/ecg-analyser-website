@@ -90,6 +90,9 @@ export const adminService = {
       body: JSON.stringify({ validatedPrediction, notes }),
     }),
 
+  getSessionEcg: (sessionId) =>
+    request(`/admin/sessions/${sessionId}/ecg`),
+
   getLogs: (search, page = 1, pageSize = 50, eventType = '') =>
     request(`/admin/logs?page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${eventType ? `&eventType=${encodeURIComponent(eventType)}` : ''}`),
 

@@ -29,7 +29,7 @@ const MIN_PX_PER_SEC = 10;
 const MAX_PX_PER_SEC = 400;
 
 // ── component ──────────────────────────────────────────────────────────────
-export default function ECGViewer({ sessionId, onClose }) {
+export default function ECGViewer({ sessionId, onClose, ecgData }) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
@@ -41,6 +41,11 @@ export default function ECGViewer({ sessionId, onClose }) {
 
   // ── fetch data ────────────────────────────────────────────────────────
   useEffect(() => {
+    if (ecgData) {
+      setData(ecgData);
+      setLoading(false);
+      return;
+    }
     if (!sessionId) return;
     setLoading(true);
     setError('');
@@ -48,7 +53,7 @@ export default function ECGViewer({ sessionId, onClose }) {
       .then(setData)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [sessionId]);
+  }, [sessionId, ecgData]);
 
   // ── derive signal array ────────────────────────────────────────────────
   const getSignal = useCallback(() => {

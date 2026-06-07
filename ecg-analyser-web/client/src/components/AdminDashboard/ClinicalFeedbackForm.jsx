@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { adminService } from '../../services/api';
-import { ClipboardCheck, Loader2, AlertCircle, CheckCircle2, Activity, Calendar, ChevronLeft } from 'lucide-react';
+import { ClipboardCheck, Loader2, AlertCircle, CheckCircle2, Activity, ChevronLeft } from 'lucide-react';
+import ECGViewer from '../Dashboard/ECGViewer';
 
 export default function ClinicalFeedbackForm({ patientId, patientName, onBack }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedSession, setSelectedSession] = useState(null);
+  const [ecgData, setEcgData] = useState(null);
+  const [ecgLoading, setEcgLoading] = useState(false);
   const [validatedPrediction, setValidatedPrediction] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -21,6 +24,20 @@ export default function ClinicalFeedbackForm({ patientId, patientName, onBack })
       .finally(() => setLoading(false));
   }, [patientId]);
 
+  useEffect(() => {
+    if (!selectedSession) {
+      setEcgData(null);
+      return;
+    }
+    setEcgLoading(true);
+    setEcgData(null);
+    setError('');
+    adminService.getSessionEcg(selectedSession)
+      .then(setEcgData)
+      .catch(e => setError(e.message))
+      .finally(() => setEcgLoading(false));
+  }, [selectedSession]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedSession || !validatedPrediction) return;
@@ -33,6 +50,7 @@ export default function ClinicalFeedbackForm({ patientId, patientName, onBack })
       setValidatedPrediction('');
       setNotes('');
       setSelectedSession(null);
+      setEcgData(null);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -67,7 +85,7 @@ export default function ClinicalFeedbackForm({ patientId, patientName, onBack })
         </div>
       ) : (
         <>
-          <div className="space-y-2 mb-4 max-h-[300px] overflow-y-auto">
+          <div className="space-y-2 mb-4 max-h-[200px] overflow-y-auto">
             {sessions.map((s) => (
               <button
                 key={s.id}
@@ -97,6 +115,18 @@ export default function ClinicalFeedbackForm({ patientId, patientName, onBack })
               </button>
             ))}
           </div>
+
+          {selectedSession && ecgLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 size={24} className="animate-spin text-orange-400" />
+            </div>
+          )}
+
+          {selectedSession && ecgData && (
+            <div className="mb-4">
+              <ECGViewer sessionId={selectedSession} ecgData={ecgData} onClose={null} />
+            </div>
+          )}
 
           {selectedSession && (
             <form onSubmit={handleSubmit} className="space-y-3 border-t border-[var(--border-color)] pt-4">

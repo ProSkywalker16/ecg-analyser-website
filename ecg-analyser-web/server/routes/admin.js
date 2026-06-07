@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { supabase } from '../index.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { logAuditEvent, getReqMeta } from '../utils/audit.js';
+import { processCsvSession } from '../utils/processCsv.js';
 
 function generatePassword(length = 12) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
@@ -256,6 +257,25 @@ router.post('/sessions/:id/verify', async (req, res) => {
     res.json({ message: 'Session verified successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+router.get('/sessions/:id/ecg', async (req, res) => {
+  try {
+    const data = await processCsvSession(supabase, req.params.id);
+
+    const meta = getReqMeta(req);
+    logAuditEvent({
+      eventType: 'session_ecg_viewed',
+      ...meta,
+      patientId: data.sessionId,
+      details: `Admin viewed ECG waveform for session ${req.params.id}`,
+    });
+
+    res.json(data);
+  } catch (error) {
+    console.error('[ADMIN ECG]', error.message);
+    res.status(500).json({ error: error.message || 'Failed to process ECG data' });
   }
 });
 
