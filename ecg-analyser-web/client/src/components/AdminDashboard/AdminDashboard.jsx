@@ -5,10 +5,11 @@ import AdminStats from './AdminStats';
 import PatientDirectory from './PatientDirectory';
 import ClinicalFeedbackForm from './ClinicalFeedbackForm';
 import AuditLogs from './AuditLogs';
+import IpBlockManager from './IpBlockManager';
 import { adminService } from '../../services/api';
 import {
   Activity, User, LogOut, Menu, X,
-  LayoutDashboard, Users, ClipboardCheck, Shield, ScrollText,
+  LayoutDashboard, Users, ClipboardCheck, Shield, ScrollText, Ban,
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -29,6 +30,7 @@ export default function AdminDashboard() {
     { id: 'patients', label: 'Patient Database', icon: Users },
     { id: 'reviewer', label: 'Session Reviewer', icon: ClipboardCheck },
     { id: 'logs', label: 'Audit Logs', icon: ScrollText },
+    { id: 'ipblocks', label: 'IP Blocks', icon: Ban },
   ];
 
   const sidebarContent = (
@@ -163,6 +165,8 @@ export default function AdminDashboard() {
               )}
 
               {activeTab === 'logs' && <AuditLogs />}
+
+              {activeTab === 'ipblocks' && <IpBlockManager />}
             </div>
           </main>
         </div>

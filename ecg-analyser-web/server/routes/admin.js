@@ -260,6 +260,100 @@ router.post('/sessions/:id/verify', async (req, res) => {
   }
 });
 
+router.get('/blocked-ips', async (req, res) => {
+  try {
+    const { page, pageSize } = req.query;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const size = Math.min(200, Math.max(1, parseInt(pageSize) || 50));
+    const offset = (pageNum - 1) * size;
+
+    const { data, error, count } = await supabase
+      .from('blocked_ips')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + size - 1);
+
+    if (error) throw error;
+    res.json({ data: data || [], total: count, page: pageNum, pageSize: size });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch blocked IPs' });
+  }
+});
+
+router.post('/blocked-ips', async (req, res) => {
+  try {
+    const { ip_address, reason } = req.body;
+    if (!ip_address || !ip_address.trim()) {
+      return res.status(400).json({ error: 'IP address is required' });
+    }
+
+    const { data: existing } = await supabase
+      .from('blocked_ips')
+      .select('id')
+      .eq('ip_address', ip_address.trim());
+
+    if (existing && existing.length > 0) {
+      return res.status(409).json({ error: 'This IP is already blocked' });
+    }
+
+    const { data, error } = await supabase
+      .from('blocked_ips')
+      .insert({
+        ip_address: ip_address.trim(),
+        reason: reason || null,
+        blocked_by: req.user.name,
+        created_at: new Date().toISOString(),
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    const meta = getReqMeta(req);
+    logAuditEvent({
+      eventType: 'ip_blocked',
+      ...meta,
+      details: `Admin blocked IP ${ip_address}${reason ? `: ${reason}` : ''}`,
+    });
+
+    res.status(201).json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to block IP' });
+  }
+});
+
+router.delete('/blocked-ips/:id', async (req, res) => {
+  try {
+    const { data: existing } = await supabase
+      .from('blocked_ips')
+      .select('ip_address')
+      .eq('id', req.params.id)
+      .single();
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Blocked IP not found' });
+    }
+
+    const { error } = await supabase
+      .from('blocked_ips')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+
+    const meta = getReqMeta(req);
+    logAuditEvent({
+      eventType: 'ip_unblocked',
+      ...meta,
+      details: `Admin unblocked IP ${existing.ip_address}`,
+    });
+
+    res.json({ message: 'IP unblocked' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to unblock IP' });
+  }
+});
+
 router.get('/sessions/:id/ecg', async (req, res) => {
   try {
     const data = await processCsvSession(supabase, req.params.id);

@@ -193,6 +193,23 @@ ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS event_type VARCHAR(20) DEFAULT '
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details TEXT;
 
 -- ============================================================
+-- Blocked IPs Table for Admin IP Management
+-- ============================================================
+CREATE TABLE IF NOT EXISTS blocked_ips (
+  id BIGSERIAL PRIMARY KEY,
+  ip_address VARCHAR(45) NOT NULL UNIQUE,
+  reason TEXT,
+  blocked_by VARCHAR(100),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_blocked_ips_ip ON blocked_ips(ip_address);
+
+ALTER TABLE blocked_ips ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "anon_deny_blocked_ips" ON blocked_ips;
+CREATE POLICY "anon_deny_blocked_ips" ON blocked_ips FOR ALL TO anon USING (false);
+
+-- ============================================================
 -- Promote first admin user (update username as needed)
 -- ============================================================
 -- UPDATE patients SET role = 'admin' WHERE name = 'YourAdminUsername';

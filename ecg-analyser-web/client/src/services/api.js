@@ -93,6 +93,18 @@ export const adminService = {
   getSessionEcg: (sessionId) =>
     request(`/admin/sessions/${sessionId}/ecg`),
 
+  getBlockedIps: (page = 1, pageSize = 50) =>
+    request(`/admin/blocked-ips?page=${page}&pageSize=${pageSize}`),
+
+  blockIp: (ipAddress, reason) =>
+    request('/admin/blocked-ips', {
+      method: 'POST',
+      body: JSON.stringify({ ip_address: ipAddress, reason }),
+    }),
+
+  unblockIp: (id) =>
+    request(`/admin/blocked-ips/${id}`, { method: 'DELETE' }),
+
   getLogs: (search, page = 1, pageSize = 50, eventType = '') =>
     request(`/admin/logs?page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${eventType ? `&eventType=${encodeURIComponent(eventType)}` : ''}`),
 

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
+import { blockIpMiddleware } from './middleware/blockIp.js';
 import authRoutes from './routes/auth.js';
 import patientRoutes from './routes/patients.js';
 import fileRoutes from './routes/files.js';
@@ -88,6 +89,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.use('/api/', blockIpMiddleware);
 app.use('/api/', apiLimiter);
 
 // Trust first proxy hop (Render's LB) — real client IP via X-Forwarded-For
