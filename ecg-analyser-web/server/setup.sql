@@ -207,7 +207,7 @@ CREATE INDEX IF NOT EXISTS idx_blocked_ips_ip ON blocked_ips(ip_address);
 
 ALTER TABLE blocked_ips ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "anon_deny_blocked_ips" ON blocked_ips;
-CREATE POLICY "anon_deny_blocked_ips" ON blocked_ips FOR ALL TO anon USING (false);
+CREATE POLICY "anon_deny_blocked_ips" ON blocked_ips FOR SELECT TO anon USING (false);
 
 -- ============================================================
 -- Promote first admin user (update username as needed)

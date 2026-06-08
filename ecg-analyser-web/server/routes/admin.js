@@ -387,7 +387,8 @@ router.post('/blocked-ips', async (req, res) => {
 
     res.status(201).json(data);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to block IP' });
+    console.error('[BLOCK-IP]', error.message, error.code || '');
+    res.status(500).json({ error: `Failed to block IP: ${error.message}` });
   }
 });
 
