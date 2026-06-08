@@ -3,7 +3,7 @@ import { supabase } from '../index.js';
 const cache = {
   blocked: new Set(),
   lastFetch: 0,
-  ttl: 30000,
+  ttl: 10000,
 };
 
 async function refreshCache() {
@@ -16,8 +16,16 @@ async function refreshCache() {
   }
 }
 
+export function addToBlockCache(ip) {
+  if (ip) cache.blocked.add(ip);
+}
+
+export function removeFromBlockCache(ip) {
+  if (ip) cache.blocked.delete(ip);
+}
+
 export async function blockIpMiddleware(req, res, next) {
-  if (Date.now() - cache.lastFetch > cache.ttl) {
+  if (Date.now() - cache.lastFetch >= cache.ttl) {
     await refreshCache();
   }
 
