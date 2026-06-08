@@ -29,7 +29,7 @@ export async function logAuditEvent({ eventType, patientId, details, ip, userAge
   }
 }
 
-export function getReqMeta(req) {
+export function resolveClientIp(req) {
   let ip = req.ip;
 
   if (!ip || isPrivateIP(ip)) {
@@ -52,8 +52,12 @@ export function getReqMeta(req) {
     ip = ip.substring(7);
   }
 
+  return ip || 'unknown';
+}
+
+export function getReqMeta(req) {
   return {
-    ip: ip || 'unknown',
+    ip: resolveClientIp(req),
     userAgent: req.headers['user-agent'],
     method: req.method,
     url: req.originalUrl,

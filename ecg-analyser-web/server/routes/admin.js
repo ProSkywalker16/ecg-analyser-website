@@ -5,7 +5,6 @@ import { supabase } from '../index.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { logAuditEvent, getReqMeta } from '../utils/audit.js';
 import { processCsvSession } from '../utils/processCsv.js';
-import { addToBlockCache, removeFromBlockCache } from '../middleware/blockIp.js';
 
 function generatePassword(length = 12) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
@@ -379,8 +378,6 @@ router.post('/blocked-ips', async (req, res) => {
 
     if (error) throw error;
 
-    addToBlockCache(ip_address);
-
     const meta = getReqMeta(req);
     logAuditEvent({
       eventType: 'ip_blocked',
@@ -413,8 +410,6 @@ router.delete('/blocked-ips/:id', async (req, res) => {
       .eq('id', req.params.id);
 
     if (error) throw error;
-
-    removeFromBlockCache(existing.ip_address);
 
     const meta = getReqMeta(req);
     logAuditEvent({
