@@ -210,6 +210,25 @@ DROP POLICY IF EXISTS "anon_deny_blocked_ips" ON blocked_ips;
 CREATE POLICY "anon_deny_blocked_ips" ON blocked_ips FOR SELECT TO anon USING (false);
 
 -- ============================================================
+-- Auth Tokens Table for Session Revocation on IP Block
+-- ============================================================
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  jti UUID PRIMARY KEY,
+  patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  ip_address VARCHAR(45) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_patient ON auth_tokens(patient_id);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_ip ON auth_tokens(ip_address);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_expires ON auth_tokens(expires_at);
+
+ALTER TABLE auth_tokens ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "anon_deny_auth_tokens" ON auth_tokens;
+CREATE POLICY "anon_deny_auth_tokens" ON auth_tokens FOR ALL TO anon USING (false);
+
+-- ============================================================
 -- Promote first admin user (update username as needed)
 -- ============================================================
 -- UPDATE patients SET role = 'admin' WHERE name = 'YourAdminUsername';

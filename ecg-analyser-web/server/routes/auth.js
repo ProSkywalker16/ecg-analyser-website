@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { supabase } from '../index.js';
 import { generateToken, authenticateToken } from '../middleware/auth.js';
-import { logAuditEvent, getReqMeta } from '../utils/audit.js';
+import { logAuditEvent, getReqMeta, resolveClientIp } from '../utils/audit.js';
 
 const ALLOWED_COLS = 'id, name, age, weight_kg, bp_systolic, bp_diastolic, comorbidities, role, created_at, updated_at';
 
@@ -69,9 +69,16 @@ router.post('/login', async (req, res) => {
     }
 
     const user = users[0];
-    const token = generateToken({ id: user.id, name: user.name, role: user.role || 'patient' });
+    const { token, jti } = generateToken({ id: user.id, name: user.name, role: user.role || 'patient' });
 
     const meta = getReqMeta(req);
+    await supabase.from('auth_tokens').insert({
+      jti,
+      patient_id: user.id,
+      ip_address: resolveClientIp(req),
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    }).then().catch(e => console.error('[AUTH] Token store error:', e.message));
+
     logAuditEvent({ eventType: 'login_success', patientId: user.id, details: user.name, ip: meta.ip, userAgent: meta.userAgent, method: meta.method, url: meta.url });
 
     res.json({ token, user });
@@ -138,9 +145,16 @@ router.post('/register', async (req, res) => {
       return res.status(500).json({ error: 'Registration failed' });
     }
 
-    const token = generateToken({ id: newUser.id, name: newUser.name, role: newUser.role || 'patient' });
+    const { token, jti } = generateToken({ id: newUser.id, name: newUser.name, role: newUser.role || 'patient' });
 
     const meta = getReqMeta(req);
+    await supabase.from('auth_tokens').insert({
+      jti,
+      patient_id: newUser.id,
+      ip_address: resolveClientIp(req),
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    }).then().catch(e => console.error('[AUTH] Token store error:', e.message));
+
     logAuditEvent({ eventType: 'register', patientId: newUser.id, details: newUser.name, ip: meta.ip, userAgent: meta.userAgent, method: meta.method, url: meta.url });
 
     res.status(201).json({ token, user: newUser });
@@ -152,6 +166,12 @@ router.post('/register', async (req, res) => {
 
 router.post('/logout', authenticateToken, (req, res) => {
   const meta = getReqMeta(req);
+
+  if (req.user.jti) {
+    supabase.from('auth_tokens').delete().eq('jti', req.user.jti)
+      .then().catch(e => console.error('[AUTH] Token delete error:', e.message));
+  }
+
   logAuditEvent({ eventType: 'logout', patientId: req.user.id, details: req.user.name, ip: meta.ip, userAgent: meta.userAgent, method: meta.method, url: meta.url });
   res.json({ message: 'Logged out' });
 });

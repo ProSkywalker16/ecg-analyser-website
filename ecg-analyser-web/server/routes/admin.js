@@ -378,6 +378,9 @@ router.post('/blocked-ips', async (req, res) => {
 
     if (error) throw error;
 
+    // Revoke all active sessions from this IP
+    await supabase.from('auth_tokens').delete().eq('ip_address', ip_address.trim());
+
     const meta = getReqMeta(req);
     logAuditEvent({
       eventType: 'ip_blocked',

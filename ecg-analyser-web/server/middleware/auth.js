@@ -1,4 +1,6 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { supabase } from '../index.js';
 import { logAuditEvent, getReqMeta } from '../utils/audit.js';
 
 function getJwtSecret() {
@@ -10,7 +12,7 @@ function getJwtSecret() {
   return secret;
 }
 
-export function authenticateToken(req, res, next) {
+export async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -18,17 +20,36 @@ export function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, getJwtSecret(), (err, user) => {
+  jwt.verify(token, getJwtSecret(), async (err, decoded) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
-    req.user = user;
+
+    if (decoded.jti) {
+      try {
+        const { data: session } = await supabase
+          .from('auth_tokens')
+          .select('jti')
+          .eq('jti', decoded.jti)
+          .maybeSingle();
+
+        if (!session) {
+          return res.status(401).json({ error: 'Session revoked' });
+        }
+      } catch (dbErr) {
+        console.error('[AUTH] Session check error:', dbErr.message);
+      }
+    }
+
+    req.user = decoded;
     next();
   });
 }
 
 export function generateToken(payload) {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: '24h' });
+  const jti = crypto.randomUUID();
+  const token = jwt.sign({ ...payload, jti }, getJwtSecret(), { expiresIn: '24h' });
+  return { token, jti };
 }
 
 export function requireRole(allowedRoles) {
