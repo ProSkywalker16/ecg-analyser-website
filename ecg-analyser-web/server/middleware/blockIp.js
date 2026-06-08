@@ -16,7 +16,7 @@ export async function blockIpMiddleware(req, res, next) {
       .maybeSingle();
 
     if (data) {
-      return res.status(403).json({ error: 'Your IP address has been blocked by the administrator.' });
+      return res.status(403).json({ error: 'User has been blocked by admin, contact admin.' });
     }
   } catch (err) {
     console.error('[IP-BLOCK] Query error:', err.message);

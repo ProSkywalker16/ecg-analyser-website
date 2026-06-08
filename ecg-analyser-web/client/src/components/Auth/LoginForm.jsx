@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, EyeOff, LogIn, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, LogIn, AlertCircle, ShieldAlert, Loader2 } from 'lucide-react';
 
 export default function LoginForm() {
   const [form, setForm] = useState({ name: '', password: '', passcode: '' });
@@ -11,6 +11,15 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('blocked') === '1') {
+      setError('User has been blocked by admin, contact admin.');
+    } else if (searchParams.get('session') === 'revoked') {
+      setError('Your session has been revoked. Please log in again.');
+    }
+  }, [searchParams]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -37,8 +46,16 @@ export default function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-          <AlertCircle size={16} className="shrink-0" />
+        <div className={`flex items-center gap-2 p-3 rounded-xl text-sm ${
+          error.includes('blocked by admin')
+            ? 'bg-orange-500/10 border border-orange-500/20 text-orange-400'
+            : 'bg-red-500/10 border border-red-500/20 text-red-400'
+        }`}>
+          {error.includes('blocked by admin') ? (
+            <ShieldAlert size={16} className="shrink-0" />
+          ) : (
+            <AlertCircle size={16} className="shrink-0" />
+          )}
           {error}
         </div>
       )}

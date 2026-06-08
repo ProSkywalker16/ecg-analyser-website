@@ -16,6 +16,18 @@ async function request(endpoint, options = {}) {
   const data = await res.json();
 
   if (!res.ok) {
+    if (res.status === 403 && data.error && data.error.includes('blocked by admin')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login?blocked=1';
+      return;
+    }
+    if (res.status === 401 && data.error === 'Session revoked') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login?session=revoked';
+      return;
+    }
     throw new Error(data.error || 'Request failed');
   }
 
