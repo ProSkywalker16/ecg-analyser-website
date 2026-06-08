@@ -260,6 +260,75 @@ router.post('/sessions/:id/verify', async (req, res) => {
   }
 });
 
+router.get('/ip-actions', async (req, res) => {
+  try {
+    const { search, page, pageSize } = req.query;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const size = Math.min(200, Math.max(1, parseInt(pageSize) || 50));
+
+    let logQuery = supabase
+      .from('audit_logs')
+      .select('ip_address, patient_id, patients(name), created_at, event_type')
+      .order('created_at', { ascending: false });
+
+    if (search) {
+      logQuery = logQuery.or(`ip_address.ilike.%${search}%,patients.name.ilike.%${search}%`);
+    }
+
+    const { data: logs, error: logError } = await logQuery;
+
+    if (logError) throw logError;
+
+    const ipMap = new Map();
+    for (const log of logs || []) {
+      const ip = log.ip_address;
+      if (!ip) continue;
+      if (!ipMap.has(ip)) {
+        ipMap.set(ip, {
+          ip_address: ip,
+          patient_name: log.patients?.name || 'Anonymous',
+          patient_id: log.patient_id,
+          last_seen: log.created_at,
+          event_count: 1,
+        });
+      } else {
+        const entry = ipMap.get(ip);
+        entry.event_count++;
+        if (new Date(log.created_at) > new Date(entry.last_seen)) {
+          entry.last_seen = log.created_at;
+          if (log.patients?.name) entry.patient_name = log.patients.name;
+          entry.patient_id = log.patient_id || entry.patient_id;
+        }
+      }
+    }
+
+    const { data: blockedIps } = await supabase.from('blocked_ips').select('id, ip_address, reason, blocked_by, created_at');
+    const blockedMap = new Map((blockedIps || []).map(b => [b.ip_address, b]));
+
+    const allIps = Array.from(ipMap.values()).map(entry => {
+      const blocked = blockedMap.get(entry.ip_address);
+      return {
+        ...entry,
+        is_blocked: !!blocked,
+        blocked_id: blocked?.id || null,
+        block_reason: blocked?.reason || null,
+        blocked_by: blocked?.blocked_by || null,
+        blocked_at: blocked?.created_at || null,
+      };
+    });
+
+    allIps.sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen));
+
+    const total = allIps.length;
+    const offset = (pageNum - 1) * size;
+    const paged = allIps.slice(offset, offset + size);
+
+    res.json({ data: paged, total, page: pageNum, pageSize: size });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch IP actions' });
+  }
+});
+
 router.get('/blocked-ips', async (req, res) => {
   try {
     const { page, pageSize } = req.query;

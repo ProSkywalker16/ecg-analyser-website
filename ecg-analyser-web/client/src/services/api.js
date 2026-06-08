@@ -93,6 +93,9 @@ export const adminService = {
   getSessionEcg: (sessionId) =>
     request(`/admin/sessions/${sessionId}/ecg`),
 
+  getIpActions: (search, page = 1, pageSize = 50) =>
+    request(`/admin/ip-actions?page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
+
   getBlockedIps: (page = 1, pageSize = 50) =>
     request(`/admin/blocked-ips?page=${page}&pageSize=${pageSize}`),
 
